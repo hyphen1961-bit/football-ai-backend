@@ -34,17 +34,18 @@ async def test_api():
         "x-apisports-key": RAPIDAPI_KEY
     }
     
-    # Heutiges Datum
-today = datetime.now().strftime("%Y-%m-%d")
+    # Heutiges Datum (JETZT RICHTIG EINGERÜCKT!)
+    today = datetime.now().strftime("%Y-%m-%d")
 
-params = {
-    "league": "78",  # Bundesliga
-    "season": "2026",  # Aktuelle Saison
-    "from": today,
-    "to": today
-}
+    params = {
+        "league": "78",  # Bundesliga
+        "season": "2026",  # Aktuelle Saison
+        "from": today,
+        "to": today
+    }
     
-async with httpx.AsyncClient() as client:
+    # AUCH DIESER TEIL MUSS EINGERÜCKT SEIN!
+    async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, params=params)
         data = response.json()
         
