@@ -44,7 +44,7 @@ params = {
     "to": today
 }
     
-    async with httpx.AsyncClient() as client:
+async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, params=params)
         data = response.json()
         
