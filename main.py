@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -33,12 +34,15 @@ async def test_api():
         "x-apisports-key": RAPIDAPI_KEY
     }
     
-    params = {
-        "league": "78",  # Bundesliga
-        "season": "2024",
-        "from": "2024-09-13",
-        "to": "2024-09-13"
-    }
+    # Heutiges Datum
+today = datetime.now().strftime("%Y-%m-%d")
+
+params = {
+    "league": "78",  # Bundesliga
+    "season": "2026",  # Aktuelle Saison
+    "from": today,
+    "to": today
+}
     
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, params=params)
