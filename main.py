@@ -18,9 +18,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+RAPIDAPI_KEY = os.getenv("8155c26bcddfb8eec70ddbcec7d9485c")
+SUPABASE_URL = os.getenv("https://knjgiaphysdgxenritzh.supabase.co")
+SUPABASE_KEY = os.getenv("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
