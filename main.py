@@ -33,7 +33,12 @@ async def test_api():
     url = "https://v3.football.api-sports.io/fixtures"
     headers = {"x-apisports-key": RAPIDAPI_KEY}
     today = datetime.now().strftime("%Y-%m-%d")
-    params = {"league": "78", "season": "2024", "from": today, "to": today}
+    params = {
+    "league": "78",
+    "season": "2024",  # ← Hier 2024 statt 2026
+    "from": "2024-09-14",
+    "to": "2024-09-14"
+}
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, params=params)
