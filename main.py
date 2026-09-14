@@ -97,6 +97,61 @@ def health_detailed():
         "rapidapi": "configured" if os.getenv("RAPIDAPI_KEY") else "missing"
     }
 
+# ============================================================
+# 6) AUTH ENDPOINTS
+# ============================================================
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/auth/login")
+async def login(request: LoginRequest):
+    """
+    Login mit Email und Password. Gibt JWT-Token zurück.
+    """
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": request.email,
+            "password": request.password
+        })
+        
+        if not response.user:
+            raise HTTPException(status_code=401, detail="Login fehlgeschlagen")
+        
+        return {
+            "access_token": response.session.access_token,
+            "token_type": "bearer",
+            "user_id": response.user.id,
+            "email": response.user.email
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Login fehlgeschlagen: {str(e)}")
+
+
+@app.post("/auth/register")
+async def register(request: LoginRequest):
+    """
+    Registrierung mit Email und Password.
+    """
+    try:
+        response = supabase.auth.sign_up({
+            "email": request.email,
+            "password": request.password
+        })
+        
+        if not response.user:
+            raise HTTPException(status_code=400, detail="Registrierung fehlgeschlagen")
+        
+        return {
+            "message": "Registrierung erfolgreich",
+            "user_id": response.user.id,
+            "email": response.user.email
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Registrierung fehlgeschlagen: {str(e)}")
 
 # ============================================================
 # 5) MATCH-SYNC ENDPOINT (Admin only)
