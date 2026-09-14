@@ -405,6 +405,127 @@ async def get_all_users(current_user = Depends(get_current_user)):
 # 9) START
 # ============================================================
 
+# ============================================================
+# 10) PUNKTE-SYSTEM & RANGLISTE
+# ============================================================
+
+@app.post("/api/matches/{match_id}/evaluate")
+async def evaluate_match(
+    match_id: int,
+    current_user = Depends(require_admin)  # Nur Admins dürfen auswerten
+):
+    """
+    Wertet ein beendetes Match aus und vergibt Punkte an alle Tipps.
+    3 Punkte = Exaktes Ergebnis
+    1 Punkt = Richtige Tendenz (Heimsieg/Unentschieden/Auswärtssieg)
+    0 Punkte = Falsch
+    """
+    try:
+        # 1. Match-Daten holen
+        match_res = supabase.table("matches").select("*").eq("id", match_id).execute()
+        if not match_res.data:
+            raise HTTPException(status_code=404, detail="Match nicht gefunden")
+        
+        match = match_res.data[0]
+        
+        # Nur auswerten, wenn das Spiel wirklich beendet ist
+        if match["status"] not in ["FT", "AET", "PEN"]:
+            raise HTTPException(status_code=400, detail="Match ist noch nicht beendet")
+        
+        if match["home_score"] is None or match["away_score"] is None:
+            raise HTTPException(status_code=400, detail="Kein Endergebnis verfügbar")
+        
+        # 2. Alle Tipps für dieses Match holen
+        tips_res = supabase.table("user_tips").select("*").eq("match_id", match_id).execute()
+        tips = tips_res.data
+        
+        updated_count = 0
+        
+        for tip in tips:
+            home_tip = tip["home_tip"]
+            away_tip = tip["away_tip"]
+            home_score = match["home_score"]
+            away_score = match["away_score"]
+            
+            points = 0
+            
+            # Logik: Exaktes Ergebnis?
+            if home_tip == home_score and away_tip == away_score:
+                points = 3
+            else:
+                # Logik: Richtige Tendenz?
+                # Heimsieg: home > away
+                # Unentschieden: home == away
+                # Auswärtssieg: home < away
+                tip_trend = (home_tip > away_tip) - (home_tip < away_tip)  # 1, 0, oder -1
+                result_trend = (home_score > away_score) - (home_score < away_score)  # 1, 0, oder -1
+                
+                if tip_trend == result_trend:
+                    points = 1
+            
+            # 3. Punkte in der Datenbank aktualisieren
+            supabase.table("user_tips").update({"points": points}).eq("id", tip["id"]).execute()
+            updated_count += 1
+        
+        return {
+            "success": True,
+            "match_id": match_id,
+            "updated_tips": updated_count,
+            "final_score": f"{home_score}:{away_score}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auswertung fehlgeschlagen: {str(e)}")
+
+
+@app.get("/api/leaderboard")
+async def get_leaderboard(
+    season: int = 2026,
+    limit: int = Query(50, ge=1, le=200),
+    current_user = Depends(get_current_user)
+):
+    """
+    Rangliste: Summiert alle Punkte eines Users für eine Saison.
+    """
+    try:
+        # Wir joinen user_tips mit users, gruppieren nach User und summieren die Punkte
+        # Hinweis: Supabase RPC ist hierfür am besten, aber wir machen es einfach mit einer Abfrage
+        
+        # Alle Tipps mit Punkten und User-Daten für die Saison holen
+        result = supabase.table("user_tips").select(
+            "points, users(id, username, display_name, avatar_url), matches(season)"
+        ).eq("matches.season", season).execute()
+        
+        # Punkte im Python-Code aggregieren (einfacher als komplexe SQL-Views für den Anfang)
+        user_scores = {}
+        for row in result.data:
+            user_id = row["users"]["id"]
+            if user_id not in user_scores:
+                user_scores[user_id] = {
+                    "user_id": user_id,
+                    "username": row["users"].get("username", "Unbekannt"),
+                    "display_name": row["users"].get("display_name", "Unbekannt"),
+                    "avatar_url": row["users"].get("avatar_url"),
+                    "total_points": 0,
+                    "tips_count": 0
+                }
+            user_scores[user_id]["total_points"] += row["points"]
+            user_scores[user_id]["tips_count"] += 1
+        
+        # In Liste umwandeln und nach Punkten sortieren (absteigend)
+        leaderboard = list(user_scores.values())
+        leaderboard.sort(key=lambda x: x["total_points"], reverse=True)
+        
+        return {
+            "season": season,
+            "leaderboard": leaderboard[:limit]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Rangliste laden fehlgeschlagen: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
