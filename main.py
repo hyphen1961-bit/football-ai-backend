@@ -1,142 +1,157 @@
-from fastapi import FastAPI, HTTPException
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from supabase import create_client, Client
+# ============================================================
+# MATCH-SYNC ENDPOINT
+# ============================================================
+
 import httpx
-import os
-from dotenv import load_dotenv
 from datetime import datetime
+from fastapi import HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from supabase import create_client, Client
 
-load_dotenv()
+# Security
+security = HTTPBearer()
 
-app = FastAPI()
+# Supabase Client (sollte schon initialisiert sein)
+# supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+async def get_current_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> dict:
+    """Verifiziert JWT und prüft Admin-Rolle"""
+    try:
+        # JWT verifizieren via Supabase
+        user = supabase.auth.get_user(credentials.credentials)
+        
+        if not user or not user.user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Admin-Rolle prüfen
+        user_data = supabase.table("users").select("role").eq("id", user.user.id).execute()
+        
+        if not user_data.data or user_data.data[0].get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        return user.user
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {str(e)}")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-LEAGUES = [
-    {"id": 78, "name": "Bundesliga"},
-    {"id": 39, "name": "Premier League"},
-    {"id": 207, "name": "Swiss Super League"},
-    {"id": 2, "name": "Champions League"},
-    {"id": 3, "name": "Europa League"},
-    {"id": 848, "name": "Conference League"}
-]
-
-@app.get("/")
-def root():
-    return {"message": "Football AI Backend läuft mit Supabase!"}
-
-@app.get("/api/test")
-async def test_api():
-    # FIX: Festes Datum aus 2024 statt heute (2026)
-    url = "https://v3.football.api-sports.io/fixtures"
-    headers = {"x-apisports-key": RAPIDAPI_KEY}
-    params = {
-        "league": "78",
-        "season": "2024",
-        "from": "2024-09-14",
-        "to": "2024-09-14"
-    }
+@app.post("/api/sync/matches")
+async def sync_matches(
+    league: int = 78,  # Bundesliga default
+    season: int = 2026,
+    current_user: dict = Depends(get_current_admin)
+):
+    """
+    Synct Matches von API-Football in die Datenbank.
+    Admin-only. Upsert-Logik: Neue Matches werden angelegt, bestehende aktualisiert.
+    """
     
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers, params=params)
-        data = response.json()
+    API_FOOTBALL_KEY = os.getenv("RAPIDAPI_KEY")
+    API_FOOTBALL_HOST = "v3.football.api-sports.io"
+    
+    try:
+        # API-Football aufrufen
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://{API_FOOTBALL_HOST}/fixtures",
+                params={
+                    "league": league,
+                    "season": season
+                },
+                headers={
+                    "X-RapidAPI-Key": API_FOOTBALL_KEY,
+                    "X-RapidAPI-Host": API_FOOTBALL_HOST
+                },
+                timeout=30.0
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"API-Football error: {response.status_code}"
+                )
+            
+            data = response.json()
+            
+            if data.get("errors"):
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"API-Football errors: {data['errors']}"
+                )
+            
+            fixtures = data.get("response", [])
+            
+            if not fixtures:
+                return {"message": "No fixtures found", "count": 0}
+            
+            # Matches für Supabase vorbereiten
+            matches_to_upsert = []
+            
+            for fixture in fixtures:
+                match = {
+                    "api_match_id": fixture["fixture"]["id"],
+                    "league": fixture["league"]["name"],
+                    "season": fixture["league"]["season"],
+                    "matchday": fixture["league"]["round"].replace("Regular Season - ", "") if "Regular Season" in fixture["league"]["round"] else None,
+                    "home_team": fixture["teams"]["home"]["name"],
+                    "away_team": fixture["teams"]["away"]["name"],
+                    "home_score": fixture["goals"]["home"],
+                    "away_score": fixture["goals"]["away"],
+                    "kickoff_time": fixture["fixture"]["date"],
+                    "status": fixture["fixture"]["status"]["short"]
+                }
+                matches_to_upsert.append(match)
+            
+            # Upsert in Supabase (via api_match_id als unique key)
+            result = supabase.table("matches").upsert(
+                matches_to_upsert,
+                on_conflict="api_match_id"
+            ).execute()
+            
+            return {
+                "message": "Sync successful",
+                "count": len(matches_to_upsert),
+                "league": league,
+                "season": season
+            }
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="API-Football timeout")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@app.get("/api/matches")
+async def get_matches(
+    league: str = None,
+    season: int = None,
+    status: str = None,
+    limit: int = 50
+):
+    """
+    Holt Matches aus der Datenbank.
+    Öffentlich für authentifizierte User (via RLS).
+    """
+    try:
+        query = supabase.table("matches").select("*")
+        
+        if league:
+            query = query.eq("league", league)
+        if season:
+            query = query.eq("season", season)
+        if status:
+            query = query.eq("status", status)
+        
+        query = query.order("kickoff_time", desc=False).limit(limit)
+        
+        result = query.execute()
+        
         return {
-            "status": "success",
-            "count": len(data.get("response", [])),
-            "data": data
+            "matches": result.data,
+            "count": len(result.data)
         }
-
-@app.get("/api/sync-matches")
-async def sync_matches():
-    if not RAPIDAPI_KEY:
-        raise HTTPException(status_code=500, detail="RAPIDAPI_KEY nicht gesetzt")
-    
-    headers = {"x-apisports-key": RAPIDAPI_KEY}
-    synced_count = 0
-    
-    async with httpx.AsyncClient() as client:
-        for league in LEAGUES:
-            league_id = league["id"]
-            league_name = league["name"]
-            
-            fixtures_url = "https://v3.football.api-sports.io/fixtures"
-            params = {"league": league_id, "season": "2024", "next": 5}
-            
-            try:
-                res = await client.get(fixtures_url, headers=headers, params=params)
-                data = res.json()
-                fixtures = data.get("response", [])
-                
-                for fixture in fixtures:
-                    fixture_id = fixture["fixture"]["id"]
-                    home_team = fixture["teams"]["home"]["name"]
-                    away_team = fixture["teams"]["away"]["name"]
-                    match_date = fixture["fixture"]["date"]
-                    
-                    pred_url = "https://v3.football.api-sports.io/predictions"
-                    pred_params = {"fixture": fixture_id}
-                    pred_res = await client.get(pred_url, headers=headers, params=pred_params)
-                    pred_data = pred_res.json()
-                    
-                    top_pick = "Unentschieden"
-                    conf = 0
-                    ki_insight = "Daten werden analysiert..."
-                    
-                    if pred_data.get("response"):
-                        pred = pred_data["response"][0]
-                        home_pct = pred.get("percent", {}).get("home", 0)
-                        draw_pct = pred.get("percent", {}).get("draw", 0)
-                        away_pct = pred.get("percent", {}).get("away", 0)
-                        
-                        max_pct = max(home_pct, draw_pct, away_pct)
-                        conf = int(max_pct)
-                        
-                        if home_pct == max_pct:
-                            top_pick = f"{home_team} Sieg"
-                        elif away_pct == max_pct:
-                            top_pick = f"{away_team} Sieg"
-                        
-                        ki_insight = f"Statistik favorisiert {top_pick} mit {conf}% Wahrscheinlichkeit."
-                    
-                    match_data = {
-                        "api_fixture_id": fixture_id,
-                        "home_team": home_team,
-                        "away_team": away_team,
-                        "league": league_name,
-                        "match_date": match_date,
-                        "top_pick_1": top_pick,
-                        "confidence_1": conf,
-                        "ki_insight": ki_insight,
-                        "status": "SCHEDULED"
-                    }
-                    
-                    supabase.table("matches").upsert(match_data, on_conflict="api_fixture_id").execute()
-                    synced_count += 1
-                    
-            except Exception as e:
-                print(f"Fehler bei Liga {league_name}: {e}")
-    
-    return {"message": "Sync abgeschlossen", "matches_synced": synced_count}
-
-@app.get("/api/get-matches")
-async def get_matches(league: str = "Alle"):
-    query = supabase.table("matches").select("*").order("match_date", desc=False)
-    
-    if league != "Alle":
-        query = query.eq("league", league)
-    
-    response = query.execute()
-    return {"matches": response.data}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch matches: {str(e)}")
