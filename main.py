@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
 import httpx
@@ -18,9 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-RAPIDAPI_KEY = os.getenv("")
-SUPABASE_URL = os.getenv("")
-SUPABASE_KEY = os.getenv("")
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
