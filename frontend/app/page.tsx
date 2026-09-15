@@ -1,3 +1,13 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export default function Home() {
+  const [data, setData] = useState(null);
+
 export default async function Home() {
   const BACKEND_URL = "https://football-ai-backend-production-0f95.up.railway.app";
 
