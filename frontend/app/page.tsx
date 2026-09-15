@@ -1,5 +1,5 @@
-// app/page.tsx (Next.js App Router)
-export const dynamic = 'force-dynamic'; // Verhindert Caching, damit wir immer frische Daten sehen
+// app/page.tsx
+export const dynamic = 'force-dynamic';
 
 interface Match {
   id: string;
@@ -7,34 +7,44 @@ interface Match {
   home_team_name: string;
   away_team_name: string;
   kickoff_time: string;
-  status: string;
 }
 
 interface Analysis {
   api_fixture_id: number;
   ai_prediction: string;
   confidence_score: number;
-  context_notes: string;
+}
+
+// Server Action, um den Tipp an unser Railway Backend zu senden
+async function submitTip(formData: FormData) {
+  'use server';
+  const username = formData.get('username') as string;
+  const fixtureId = formData.get('fixtureId') as string;
+  const winner = formData.get('winner') as string;
+
+  await fetch('https://football-ai-backend-production-0f95.up.railway.app/tips', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: username || 'Anonym',
+      api_fixture_id: parseInt(fixtureId),
+      predicted_winner: winner
+    })
+  });
 }
 
 export default async function Home() {
-  // 1. Spiele von deinem Railway Backend holen
-  const matchesRes = await fetch('https://football-ai-backend-production-0f95.up.railway.app/matches', {
-    cache: 'no-store'
-  });
+  const matchesRes = await fetch('https://football-ai-backend-production-0f95.up.railway.app/matches', { cache: 'no-store' });
   const matches: Match[] = await matchesRes.json();
 
-  // 2. Für jedes Spiel die KI-Analyse holen (parallel für Geschwindigkeit)
   const matchesWithAnalysis = await Promise.all(
     matches.map(async (match) => {
       try {
-        const analysisRes = await fetch(`https://football-ai-backend-production-0f95.up.railway.app/analysis/${match.api_fixture_id}`, {
-          cache: 'no-store'
-        });
+        const analysisRes = await fetch(`https://football-ai-backend-production-0f95.up.railway.app/analysis/${match.api_fixture_id}`, { cache: 'no-store' });
         const analysis: Analysis = await analysisRes.json();
         return { ...match, analysis };
       } catch (error) {
-        return { ...match, analysis: null }; // Falls noch keine Analyse existiert
+        return { ...match, analysis: null };
       }
     })
   );
@@ -45,58 +55,60 @@ export default async function Home() {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">🤖 Football AI Kumpel-Tipp</h1>
         <p className="text-gray-600 mb-8">Deine persönliche KI für den perfekten Sporttipp.</p>
 
-        <div className="space-y-4">
-          {matchesWithAnalysis.length === 0 ? (
-            <p className="text-gray-500">Noch keine Spiele in der Datenbank. Lass uns welche analysieren!</p>
-          ) : (
-            matchesWithAnalysis.map((item) => {
-              const hasAnalysis = item.analysis !== null;
-              const score = item.analysis?.confidence_score || 0;
-              const prediction = item.analysis?.ai_prediction || 'Unbekannt';
-              
-              // Farbe basierend auf Confidence Score
-              const scoreColor = score >= 70 ? 'bg-green-100 text-green-800 border-green-200' : 
-                                 score >= 50 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 
-                                 'bg-red-100 text-red-800 border-red-200';
+        <div className="space-y-6">
+          {matchesWithAnalysis.map((item) => {
+            const score = item.analysis?.confidence_score || 0;
+            const prediction = item.analysis?.ai_prediction || 'Unbekannt';
+            const scoreColor = score >= 70 ? 'bg-green-100 text-green-800 border-green-200' : 
+                               score >= 50 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 
+                               'bg-red-100 text-red-800 border-red-200';
 
-              return (
-                <div key={item.id} className="bg-white rounded-lg shadow p-6 border border-gray-200">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h2 className="text-xl font-semibold text-gray-900">
-                        {item.home_team_name} vs {item.away_team_name}
-                      </h2>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {new Date(item.kickoff_time).toLocaleDateString('de-DE', { 
-                          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
-                        })}
-                      </p>
-                    </div>
-                    
-                    {hasAnalysis ? (
-                      <div className={`px-4 py-2 rounded-full border text-center ${scoreColor}`}>
-                        <div className="text-xs font-bold uppercase tracking-wide">KI Tipp</div>
-                        <div className="text-2xl font-black">{prediction}</div>
-                        <div className="text-sm font-semibold">{score}% Confidence</div>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-gray-400 italic">
-                        Noch keine KI-Analyse
-                      </div>
-                    )}
+            return (
+              <div key={item.id} className="bg-white rounded-lg shadow p-6 border border-gray-200">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {item.home_team_name} vs {item.away_team_name}
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {new Date(item.kickoff_time).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
-
-                  {hasAnalysis && item.analysis?.context_notes && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <p className="text-sm text-gray-600">
-                        💡 <span className="font-medium">KI-Notiz:</span> {item.analysis.context_notes}
-                      </p>
+                  {item.analysis && (
+                    <div className={`px-4 py-2 rounded-full border text-center ${scoreColor}`}>
+                      <div className="text-xs font-bold uppercase tracking-wide">KI Tipp</div>
+                      <div className="text-2xl font-black">{prediction}</div>
+                      <div className="text-sm font-semibold">{score}% Confidence</div>
                     </div>
                   )}
                 </div>
-              );
-            })
-          )}
+
+                {/* NEU: Das Tipp-Formular für die Kumpels */}
+                <form action={submitTip} className="mt-6 pt-4 border-t border-gray-100">
+                  <input type="hidden" name="fixtureId" value={item.api_fixture_id} />
+                  <div className="flex flex-col sm:flex-row gap-3 items-center">
+                    <input 
+                      name="username" 
+                      placeholder="Dein Name (z.B. Urs)" 
+                      className="border border-gray-300 rounded px-3 py-2 w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <button type="submit" name="winner" value="Home" className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
+                        {item.home_team_name}
+                      </button>
+                      <button type="submit" name="winner" value="Draw" className="flex-1 sm:flex-none bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition">
+                        Unentschieden
+                      </button>
+                      <button type="submit" name="winner" value="Away" className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition">
+                        {item.away_team_name}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            );
+          })}
         </div>
       </div>
     </main>
