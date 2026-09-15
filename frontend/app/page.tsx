@@ -1,114 +1,104 @@
-'use client';
+// app/page.tsx (Next.js App Router)
+export const dynamic = 'force-dynamic'; // Verhindert Caching, damit wir immer frische Daten sehen
 
-import { useState, useEffect } from 'react';
-
-// Typ-Definition für ein Match (sagt TypeScript, wie die Daten aussehen)
 interface Match {
-  id: number;
-  api_match_id: number;
-  league: string;
-  season: number;
-  matchday: number | null;
-  home_team: string;
-  away_team: string;
-  home_score: number | null;
-  away_score: number | null;
+  id: string;
+  api_fixture_id: number;
+  home_team_name: string;
+  away_team_name: string;
   kickoff_time: string;
   status: string;
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://football-ai-backend-production.up.railway.app';
+interface Analysis {
+  api_fixture_id: number;
+  ai_prediction: string;
+  confidence_score: number;
+  context_notes: string;
+}
 
-export default function Home() {
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default async function Home() {
+  // 1. Spiele von deinem Railway Backend holen
+  const matchesRes = await fetch('https://football-ai-backend-production-0f95.up.railway.app/matches', {
+    cache: 'no-store'
+  });
+  const matches: Match[] = await matchesRes.json();
 
-  useEffect(() => {
-    async function fetchMatches() {
+  // 2. Für jedes Spiel die KI-Analyse holen (parallel für Geschwindigkeit)
+  const matchesWithAnalysis = await Promise.all(
+    matches.map(async (match) => {
       try {
-        const response = await fetch(`${BACKEND_URL}/api/matches?limit=20`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch matches');
-        }
-        const data = await response.json();
-        setMatches(data.matches || []);
-      } catch (err: any) {
-        setError(err.message || 'Unbekannter Fehler');
-      } finally {
-        setLoading(false);
+        const analysisRes = await fetch(`https://football-ai-backend-production-0f95.up.railway.app/analysis/${match.api_fixture_id}`, {
+          cache: 'no-store'
+        });
+        const analysis: Analysis = await analysisRes.json();
+        return { ...match, analysis };
+      } catch (error) {
+        return { ...match, analysis: null }; // Falls noch keine Analyse existiert
       }
-    }
-
-    fetchMatches();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        <p className="text-xl">⚽ Lade Spiele...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 text-xl mb-4">❌ Fehler: {error}</p>
-          <p className="text-gray-400">Backend URL: {BACKEND_URL}</p>
-        </div>
-      </div>
-    );
-  }
+    })
+  );
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-4xl font-bold text-center mb-8">
-        ⚽ Football AI Kumpel-Tipp
-      </h1>
-
+    <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-2xl font-semibold mb-4">
-          Bundesliga Spiele ({matches.length})
-        </h2>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">🤖 Football AI Kumpel-Tipp</h1>
+        <p className="text-gray-600 mb-8">Deine persönliche KI für den perfekten Sporttipp.</p>
 
-        {matches.length === 0 ? (
-          <p className="text-gray-400">Keine Spiele gefunden.</p>
-        ) : (
-          <div className="space-y-3">
-            {matches.map((match) => (
-              <div
-                key={match.id}
-                className="bg-gray-800 rounded-lg p-4 hover:bg-gray-700 transition"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-lg">{match.home_team}</span>
-                  <span className="text-gray-400 mx-4">vs</span>
-                  <span className="font-semibold text-lg">{match.away_team}</span>
+        <div className="space-y-4">
+          {matchesWithAnalysis.length === 0 ? (
+            <p className="text-gray-500">Noch keine Spiele in der Datenbank. Lass uns welche analysieren!</p>
+          ) : (
+            matchesWithAnalysis.map((item) => {
+              const hasAnalysis = item.analysis !== null;
+              const score = item.analysis?.confidence_score || 0;
+              const prediction = item.analysis?.ai_prediction || 'Unbekannt';
+              
+              // Farbe basierend auf Confidence Score
+              const scoreColor = score >= 70 ? 'bg-green-100 text-green-800 border-green-200' : 
+                                 score >= 50 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 
+                                 'bg-red-100 text-red-800 border-red-200';
+
+              return (
+                <div key={item.id} className="bg-white rounded-lg shadow p-6 border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="text-xl font-semibold text-gray-900">
+                        {item.home_team_name} vs {item.away_team_name}
+                      </h2>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {new Date(item.kickoff_time).toLocaleDateString('de-DE', { 
+                          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                        })}
+                      </p>
+                    </div>
+                    
+                    {hasAnalysis ? (
+                      <div className={`px-4 py-2 rounded-full border text-center ${scoreColor}`}>
+                        <div className="text-xs font-bold uppercase tracking-wide">KI Tipp</div>
+                        <div className="text-2xl font-black">{prediction}</div>
+                        <div className="text-sm font-semibold">{score}% Confidence</div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-400 italic">
+                        Noch keine KI-Analyse
+                      </div>
+                    )}
+                  </div>
+
+                  {hasAnalysis && item.analysis?.context_notes && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <p className="text-sm text-gray-600">
+                        💡 <span className="font-medium">KI-Notiz:</span> {item.analysis.context_notes}
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div className="text-sm text-gray-400 mt-2">
-                  📅 {new Date(match.kickoff_time).toLocaleString('de-DE', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                  <span className="ml-4 px-2 py-1 bg-gray-700 rounded text-xs">
-                    {match.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
-
-      <footer className="text-center text-gray-500 mt-12 text-sm">
-        Backend läuft auf Railway • Frontend läuft auf Vercel
-      </footer>
-    </div>
+    </main>
   );
 }
