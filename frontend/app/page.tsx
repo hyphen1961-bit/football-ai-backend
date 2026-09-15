@@ -2,60 +2,80 @@
 
 import { useState, useEffect } from 'react';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'https://football-ai-backend-production.up.railway.app';
 
 export default function Home() {
-  const [data, setData] = useState(null);
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-export default async function Home() {
-  const BACKEND_URL = "https://football-ai-backend-production-0f95.up.railway.app";
-
-  let spiele = [];
-  
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/test`, { cache: 'no-store' });
-    const data = await res.json();
-    
-    if (data.data && data.data.response) {
-      spiele = data.data.response;
+  useEffect(() => {
+    async function fetchMatches() {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/matches?limit=10`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch matches');
+        }
+        const data = await response.json();
+        setMatches(data.matches || []);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  } catch (error) {
-    console.error("Fehler beim Laden:", error);
+
+    fetchMatches();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <p>Lade Spiele...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <p className="text-red-500">Fehler: {error}</p>
+      </div>
+    );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24 bg-gray-900 text-white">
-      <h1 className="text-4xl font-bold mb-8 text-green-400">⚽ Football AI Kumpel-Tipp</h1>
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <h1 className="text-4xl font-bold text-center mb-8">
+        ⚽ Football AI Kumpel-Tipp
+      </h1>
       
-      <div className="w-full max-w-2xl bg-gray-800 p-6 rounded-lg shadow-xl">
-        <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">
-          Aktuelles Spiel (API-Test)
-        </h2>
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-2xl font-semibold mb-4">Aktuelle Spiele</h2>
         
-        {spiele.length > 0 ? (
-          spiele.map((match: any, index: number) => (
-            <div key={index} className="mb-4 p-4 bg-gray-700 rounded-lg">
-              <div className="flex justify-between items-center text-xl font-bold">
-                <span>{match.teams.home.name}</span>
-                <span className="text-green-400 text-2xl">
-                  {match.goals.home} : {match.goals.away}
-                </span>
-                <span>{match.teams.away.name}</span>
-              </div>
-              <p className="text-gray-400 text-sm mt-2 text-center">
-                {match.fixture.date} • {match.fixture.venue.name}
-              </p>
-            </div>
-          ))
-        ) : (
+        {matches.length === 0 ? (
           <p className="text-gray-400">Keine Spiele gefunden oder Backend noch nicht erreichbar.</p>
+        ) : (
+          <div className="space-y-4">
+            {matches.map((match) => (
+              <div key={match.id} className="bg-gray-800 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold">{match.home_team}</span>
+                  <span className="text-gray-400">vs</span>
+                  <span className="font-semibold">{match.away_team}</span>
+                </div>
+                <div className="text-sm text-gray-400 mt-2">
+                  {new Date(match.kickoff_time).toLocaleString('de-DE')}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
-
-      <p className="mt-8 text-gray-500">
+      
+      <footer className="text-center text-gray-500 mt-12">
         Backend läuft auf Railway • Frontend läuft auf Vercel
-      </p>
-    </main>
+      </footer>
+    </div>
   );
 }
