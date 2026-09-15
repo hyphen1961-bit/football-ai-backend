@@ -164,4 +164,38 @@ def get_matches():
     result = supabase.table('matches').select("*").order('kickoff_time', desc=False).execute()
     return result.data
 
+from pydantic import BaseModel
+
+# Datenmodell für den Tipp
+class TipInput(BaseModel):
+    username: str
+    api_fixture_id: int
+    predicted_winner: str # "Home", "Draw" oder "Away"
+
+@app.post("/tips")
+def submit_tip(tip: TipInput):
+    """Speichert einen Kumpel-Tipp in der Datenbank"""
+    print(f"📝 Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
+    
+    # Prüfen, ob der User schon existiert, sonst anlegen
+    user_check = supabase.table('users').select('id').eq('username', tip.username).execute()
+    if not user_check.data:
+        supabase.table('users').insert({"username": tip.username}).execute()
+        user_id = supabase.table('users').select('id').eq('username', tip.username).execute().data[0]['id']
+    else:
+        user_id = user_check.data[0]['id']
+
+    # Tipp speichern (upsert verhindert Doppel-Tipps dank UNIQUE Constraint in der DB)
+    tip_data = {
+        "user_id": user_id,
+        "api_fixture_id": tip.api_fixture_id,
+        "predicted_winner": tip.predicted_winner,
+        "predicted_score_home": 0, # Platzhalter für später
+        "predicted_score_away": 0  # Platzhalter für später
+    }
+    
+    supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
+    
+    return {"message": f"✅ Tipp von {tip.username} gespeichert!", "tip": tip_data}
+
 # Für lokalen Test: uvicorn main:app --reload
