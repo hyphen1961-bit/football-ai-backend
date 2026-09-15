@@ -15,7 +15,7 @@ interface Analysis {
   confidence_score: number;
 }
 
-// Server Action, um den Tipp an unser Railway Backend zu senden
+// Server Action, um den Tip p an unser Railway Backend zu senden
 async function submitTip(formData: FormData) {
   'use server';
   const username = formData.get('username') as string;
