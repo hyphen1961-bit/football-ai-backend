@@ -74,7 +74,7 @@ def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
         for match in fixtures_data.get('response', []):
             if match['teams']['home']['id'] == team_id and match['teams']['home']['winner']:
                 wins += 1
-            elif match['teams']['away']['id'] == team_id and and match['teams']['away']['winner']:
+            elif match['teams']['away']['id'] == team_id and match['teams']['away']['winner']:
                 wins += 1
         return wins
     
