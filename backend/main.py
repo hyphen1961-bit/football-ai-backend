@@ -11,6 +11,7 @@ load_dotenv()
 
 app = FastAPI(title="Football AI Kumpel-Tipp API")
 
+# CORS für Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,6 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Supabase & API Setup
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
@@ -30,6 +32,7 @@ api_headers = {
     "x-rapidapi-host": "v3.football.api-sports.io"
 }
 
+# --- Modelle ---
 class TipInput(BaseModel):
     username: str
     api_fixture_id: int
@@ -39,6 +42,9 @@ class TipInput(BaseModel):
     tip_double_chance: Optional[str] = None
     tip_exact_score_home: Optional[int] = None
     tip_exact_score_away: Optional[int] = None
+    deviation_reason: Optional[str] = None
+
+# --- Endpoints ---
 
 @app.get("/")
 def read_root():
@@ -55,7 +61,7 @@ def get_next_fixtures(league: int = 78, season: int = 2024, limit: int = 5):
 
 @app.post("/analyze/{fixture_id}")
 def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
-    print(f" Starte KI-Analyse für Fixture {fixture_id}...")
+    print(f"🧠 Starte KI-Analyse für Fixture {fixture_id}...")
     
     form_home = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_home_id}&last=5", headers=api_headers).json()
     form_away = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_away_id}&last=5", headers=api_headers).json()
@@ -68,7 +74,7 @@ def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
         for match in fixtures_data.get('response', []):
             if match['teams']['home']['id'] == team_id and match['teams']['home']['winner']:
                 wins += 1
-            elif match['teams']['away']['id'] == team_id and match['teams']['away']['winner']:
+            elif match['teams']['away']['id'] == team_id and and match['teams']['away']['winner']:
                 wins += 1
         return wins
     
@@ -136,11 +142,13 @@ def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
         "fixture_id": fixture_id,
         "prediction": prediction,
         "confidence_score": score,
-        "form": {"home": wins_home, "away": wins_away},
-        "h2h": {"home": h2h_home_wins, "away": h2h_away_wins},
-        "odds": {"home": odds_home, "draw": odds_draw, "away": odds_away},
         "message": f"✅ Analyse gespeichert! KI tippt: {prediction} ({score}% Confidence)"
     }
+
+@app.get("/matches")
+def get_matches():
+    result = supabase.table('matches').select("*").order('kickoff_time', desc=False).execute()
+    return result.data
 
 @app.get("/analysis/{fixture_id}")
 def get_analysis(fixture_id: int):
@@ -149,14 +157,9 @@ def get_analysis(fixture_id: int):
         raise HTTPException(status_code=404, detail="Keine Analyse gefunden")
     return result.data[0]
 
-@app.get("/matches")
-def get_matches():
-    result = supabase.table('matches').select("*").order('kickoff_time', desc=False).execute()
-    return result.data
-
 @app.post("/tips")
 def submit_tip(tip: TipInput):
-    print(f"📝 Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
+    print(f" Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
     
     user_check = supabase.table('users').select('id').eq('username', tip.username).execute()
     if not user_check.data:
@@ -175,7 +178,8 @@ def submit_tip(tip: TipInput):
         "tip_btts": tip.tip_btts,
         "tip_double_chance": tip.tip_double_chance,
         "tip_exact_score_home": tip.tip_exact_score_home,
-        "tip_exact_score_away": tip.tip_exact_score_away
+        "tip_exact_score_away": tip.tip_exact_score_away,
+        "deviation_reason": tip.deviation_reason
     }
     
     supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
