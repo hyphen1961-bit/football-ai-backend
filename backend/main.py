@@ -11,7 +11,6 @@ load_dotenv()
 
 app = FastAPI(title="Football AI Kumpel-Tipp API")
 
-# CORS für Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Supabase & API Setup
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
@@ -32,7 +30,6 @@ api_headers = {
     "x-rapidapi-host": "v3.football.api-sports.io"
 }
 
-# --- Modelle ---
 class TipInput(BaseModel):
     username: str
     api_fixture_id: int
@@ -42,13 +39,10 @@ class TipInput(BaseModel):
     tip_double_chance: Optional[str] = None
     tip_exact_score_home: Optional[int] = None
     tip_exact_score_away: Optional[int] = None
-    deviation_reason: Optional[str] = None
-
-# --- Endpoints ---
 
 @app.get("/")
 def read_root():
-    return {"message": "🤖 Football AI API is running!", "status": "healthy"}
+    return {"message": " Football AI API is running!", "status": "healthy"}
 
 @app.get("/fixtures/next")
 def get_next_fixtures(league: int = 78, season: int = 2024, limit: int = 5):
@@ -159,7 +153,7 @@ def get_analysis(fixture_id: int):
 
 @app.post("/tips")
 def submit_tip(tip: TipInput):
-    print(f" Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
+    print(f"📝 Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
     
     user_check = supabase.table('users').select('id').eq('username', tip.username).execute()
     if not user_check.data:
@@ -178,8 +172,7 @@ def submit_tip(tip: TipInput):
         "tip_btts": tip.tip_btts,
         "tip_double_chance": tip.tip_double_chance,
         "tip_exact_score_home": tip.tip_exact_score_home,
-        "tip_exact_score_away": tip.tip_exact_score_away,
-        "deviation_reason": tip.deviation_reason
+        "tip_exact_score_away": tip.tip_exact_score_away
     }
     
     supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
