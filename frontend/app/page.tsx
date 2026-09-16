@@ -21,6 +21,11 @@ async function submitTip(formData: FormData) {
   const kumpelName = formData.get('kumpel_name') as string;
   const fixtureId = formData.get('fixtureId') as string;
   const winner = formData.get('winner') as string;
+  const overUnder = formData.get('over_under') as string;
+  const btts = formData.get('btts') as string;
+  const doubleChance = formData.get('double_chance') as string;
+  const exactHome = formData.get('exact_home') as string;
+  const exactAway = formData.get('exact_away') as string;
 
   await fetch('https://football-ai-backend-production-0f95.up.railway.app/tips', {
     method: 'POST',
@@ -28,7 +33,12 @@ async function submitTip(formData: FormData) {
     body: JSON.stringify({
       username: kumpelName || 'Anonym',
       api_fixture_id: parseInt(fixtureId),
-      predicted_winner: winner
+      predicted_winner: winner,
+      tip_over_under: overUnder || null,
+      tip_btts: btts || null,
+      tip_double_chance: doubleChance || null,
+      tip_exact_score_home: exactHome ? parseInt(exactHome) : null,
+      tip_exact_score_away: exactAway ? parseInt(exactAway) : null
     })
   });
 }
@@ -106,6 +116,31 @@ export default async function Home() {
                       </button>
                     </div>
                   </div>
+{/* Exaktes Ergebnis */}
+<div className="mb-4">
+  <label className="block text-sm font-semibold text-gray-700 mb-2">Exaktes Ergebnis:</label>
+  <div className="flex gap-2 items-center">
+    <select name="exact_home" className="border border-gray-300 rounded px-3 py-2 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <option value="">-</option>
+      <option value="0">0</option>
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5+</option>
+    </select>
+    <span className="text-gray-500 font-bold">:</span>
+    <select name="exact_away" className="border border-gray-300 rounded px-3 py-2 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <option value="">-</option>
+      <option value="0">0</option>
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5+</option>
+    </select>
+  </div>
+</div>
                 </form>
               </div>
             );

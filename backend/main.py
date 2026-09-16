@@ -170,7 +170,12 @@ from pydantic import BaseModel
 class TipInput(BaseModel):
     username: str
     api_fixture_id: int
-    predicted_winner: str # "Home", "Draw" oder "Away"
+    predicted_winner: str
+    tip_over_under: Optional[str] = None
+    tip_btts: Optional[str] = None
+    tip_double_chance: Optional[str] = None
+    tip_exact_score_home: Optional[int] = None  # Neu!
+    tip_exact_score_away: Optional[int] = None   # Neu!
 
 @app.post("/tips")
 def submit_tip(tip: TipInput):
@@ -186,13 +191,18 @@ def submit_tip(tip: TipInput):
         user_id = user_check.data[0]['id']
 
     # Tipp speichern (upsert verhindert Doppel-Tipps dank UNIQUE Constraint in der DB)
-    tip_data = {
-        "user_id": user_id,
-        "api_fixture_id": tip.api_fixture_id,
-        "predicted_winner": tip.predicted_winner,
-        "predicted_score_home": 0, # Platzhalter für später
-        "predicted_score_away": 0  # Platzhalter für später
-    }
+   tip_data = {
+    "user_id": user_id,
+    "api_fixture_id": tip.api_fixture_id,
+    "predicted_winner": tip.predicted_winner,
+    "predicted_score_home": 0,
+    "predicted_score_away": 0,
+    "tip_over_under": tip.tip_over_under,
+    "tip_btts": tip.tip_btts,
+    "tip_double_chance": tip.tip_double_chance,
+    "tip_exact_score_home": tip.tip_exact_score_home,    # Neu!
+    "tip_exact_score_away": tip.tip_exact_score_away     # Neu!
+}
     
     supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
     
