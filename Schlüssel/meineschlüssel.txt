@@ -1,0 +1,5 @@
+Mein secret api -supabase - my_secret_api_key_1701
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTI2NjY3MiwiZXhwIjoyMTA0ODQyNjcyfQ.YW7GjlhdW9JZE2NVt8HSsnSdovhY_-cHo5BzKOLtwTs
+
+My bub API Key - my_pub_apy_key_1701
+sb_publishable_y0lA7D658AallAdalgzO_g_bBelErAx
