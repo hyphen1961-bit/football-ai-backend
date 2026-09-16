@@ -176,6 +176,7 @@ class TipInput(BaseModel):
     tip_double_chance: Optional[str] = None
     tip_exact_score_home: Optional[int] = None  # Neu!
     tip_exact_score_away: Optional[int] = None   # Neu!
+    deviation_reason: Optional[str] = None  # <-- NEU: Das "Warum"-Feld
 
 @app.post("/tips")
 def submit_tip(tip: TipInput):
@@ -202,6 +203,7 @@ def submit_tip(tip: TipInput):
         "tip_double_chance": tip.tip_double_chance,
         "tip_exact_score_home": tip.tip_exact_score_home,    # Neu!
         "tip_exact_score_away": tip.tip_exact_score_away     # Neu!
+        "deviation_reason": tip.deviation_reason # <-- Neu
 }
     
     supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()

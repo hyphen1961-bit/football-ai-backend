@@ -1,3 +1,4 @@
+import TipForm from '@/components/TipForm';
 // app/page.tsx
 export const dynamic = 'force-dynamic';
 
@@ -94,54 +95,7 @@ export default async function Home() {
                 </div>
 
                 {/* NEU: Das Tipp-Formular für die Kumpels */}
-                <form action={submitTip} className="mt-6 pt-4 border-t border-gray-100">
-                  <input type="hidden" name="fixtureId" value={item.api_fixture_id} />
-                  <div className="flex flex-col sm:flex-row gap-3 items-center">
-                    <input 
-                      name="kumpel_name" 
-		      autoComplete="off"
-                      placeholder="Dein Name (z.B. Urs)" 
-                      className="border border-gray-300 rounded px-3 py-2 w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                    <div className="flex gap-2 w-full sm:w-auto">
-                      <button type="submit" name="winner" value="Home" className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
-                        {item.home_team_name}
-                      </button>
-                      <button type="submit" name="winner" value="Draw" className="flex-1 sm:flex-none bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition">
-                        Unentschieden
-                      </button>
-                      <button type="submit" name="winner" value="Away" className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition">
-                        {item.away_team_name}
-                      </button>
-                    </div>
-                  </div>
-{/* Exaktes Ergebnis */}
-<div className="mb-4">
-  <label className="block text-sm font-semibold text-gray-700 mb-2">Exaktes Ergebnis:</label>
-  <div className="flex gap-2 items-center">
-    <select name="exact_home" className="border border-gray-300 rounded px-3 py-2 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
-      <option value="">-</option>
-      <option value="0">0</option>
-      <option value="1">1</option>
-      <option value="2">2</option>
-      <option value="3">3</option>
-      <option value="4">4</option>
-      <option value="5">5+</option>
-    </select>
-    <span className="text-gray-500 font-bold">:</span>
-    <select name="exact_away" className="border border-gray-300 rounded px-3 py-2 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500">
-      <option value="">-</option>
-      <option value="0">0</option>
-      <option value="1">1</option>
-      <option value="2">2</option>
-      <option value="3">3</option>
-      <option value="4">4</option>
-      <option value="5">5+</option>
-    </select>
-  </div>
-</div>
-                </form>
+                   <TipForm match={item} analysis={item.analysis} />
               </div>
             );
           })}
