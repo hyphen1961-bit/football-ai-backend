@@ -178,20 +178,6 @@ class TipInput(BaseModel):
     tip_exact_score_away: Optional[int] = None   # Neu!
     deviation_reason: Optional[str] = None  # <-- NEU: Das "Warum"-Feld
 
-@app.post("/tips")
-def submit_tip(tip: TipInput):
-    """Speichert einen Kumpel-Tipp in der Datenbank"""
-    print(f"📝 Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
-    
-    # Prüfen, ob der User schon existiert, sonst anlegen
-    user_check = supabase.table('users').select('id').eq('username', tip.username).execute()
-    if not user_check.data:
-        supabase.table('users').insert({"username": tip.username}).execute()
-        user_id = supabase.table('users').select('id').eq('username', tip.username).execute().data[0]['id']
-    else:
-        user_id = user_check.data[0]['id']
-
-    # Tipp speichern (upsert verhindert Doppel-Tipps dank UNIQUE Constraint in der DB)
     tip_data = {
         "user_id": user_id,
         "api_fixture_id": tip.api_fixture_id,
@@ -201,9 +187,10 @@ def submit_tip(tip: TipInput):
         "tip_over_under": tip.tip_over_under,
         "tip_btts": tip.tip_btts,
         "tip_double_chance": tip.tip_double_chance,
-        "tip_exact_score_home": tip.tip_exact_score_home,    # Neu!
-        "tip_exact_score_away": tip.tip_exact_score_away     # Neu!
-        "deviation_reason": tip.deviation_reason # <-- Neu
+        "tip_exact_score_home": tip.tip_exact_score_home,
+        "tip_exact_score_away": tip.tip_exact_score_away,
+        "deviation_reason": tip.deviation_reason
+    }
 }
     
     supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
