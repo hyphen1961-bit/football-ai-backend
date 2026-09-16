@@ -18,7 +18,7 @@ interface Analysis {
 // Server Action, um den Tip p an unser Railway Backend zu senden
 async function submitTip(formData: FormData) {
   'use server';
-  const username = formData.get('username') as string;
+  const kumpelName = formData.get('kumpel_name') as string;
   const fixtureId = formData.get('fixtureId') as string;
   const winner = formData.get('winner') as string;
 
@@ -26,7 +26,7 @@ async function submitTip(formData: FormData) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: username || 'Anonym',
+      username: kumpelname || 'Anonym',
       api_fixture_id: parseInt(fixtureId),
       predicted_winner: winner
     })
@@ -88,7 +88,8 @@ export default async function Home() {
                   <input type="hidden" name="fixtureId" value={item.api_fixture_id} />
                   <div className="flex flex-col sm:flex-row gap-3 items-center">
                     <input 
-                      name="username" 
+                      name="kumpel_name" 
+		      autocomplete="off"
                       placeholder="Dein Name (z.B. Urs)" 
                       className="border border-gray-300 rounded px-3 py-2 w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
