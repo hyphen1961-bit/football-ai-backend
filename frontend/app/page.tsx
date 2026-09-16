@@ -26,7 +26,7 @@ async function submitTip(formData: FormData) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: kumpelname || 'Anonym',
+      username: kumpelName || 'Anonym',
       api_fixture_id: parseInt(fixtureId),
       predicted_winner: winner
     })
@@ -89,7 +89,7 @@ export default async function Home() {
                   <div className="flex flex-col sm:flex-row gap-3 items-center">
                     <input 
                       name="kumpel_name" 
-		      autocomplete="off"
+		      autoComplete="off"
                       placeholder="Dein Name (z.B. Urs)" 
                       className="border border-gray-300 rounded px-3 py-2 w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
