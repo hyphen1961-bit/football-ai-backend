@@ -9,15 +9,15 @@ interface MatchModalProps {
 }
 
 export default function MatchModal({ match, onClose }: MatchModalProps) {
-  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [timeLeft, setTimeLeft] = useState('');
   const [isLocked, setIsLocked] = useState(false);
-  const [tip1X2, setTip1X2] = useState<string>('');
-  const [tipOverUnder, setTipOverUnder] = useState<string>('');
-  const [tipBTTS, setTipBTTS] = useState<string>('');
-  const [tipDoubleChance, setTipDoubleChance] = useState<string>('');
-  const [tipExactScoreHome, setTipExactScoreHome] = useState<string>('');
-  const [tipExactScoreAway, setTipExactScoreAway] = useState<string>('');
-  const [deviationReason, setDeviationReason] = useState<string>('');
+  const [tip1X2, setTip1X2] = useState('');
+  const [tipOverUnder, setTipOverUnder] = useState('');
+  const [tipBTTS, setTipBTTS] = useState('');
+  const [tipDoubleChance, setTipDoubleChance] = useState('');
+  const [tipExactHome, setTipExactHome] = useState('');
+  const [tipExactAway, setTipExactAway] = useState('');
+  const [deviationReason, setDeviationReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!match) return null;
@@ -26,51 +26,47 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   const colorClass = getConfidenceColor(confidence);
   const leagueName = getLeagueName(match.league_id, match.league_name);
   
-  const kickoffTime = useMemo(() => {
-    return new Date(match.kickoff_time);
-  }, [match.kickoff_time]);
+  const kickoffTime = useMemo(() => new Date(match.kickoff_time), [match.kickoff_time]);
+  const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
-      const kickoff = new Date(match.kickoff_time);
-      const diff = kickoff.getTime() - now.getTime();
-      const minutesUntilKickoff = Math.floor(diff / (1000 * 60));
+      const diff = kickoffTime.getTime() - now.getTime();
+      const mins = Math.floor(diff / (1000 * 60));
       
-      if (minutesUntilKickoff <= 2) {
+      if (mins <= 2) {
         setIsLocked(true);
         setTimeLeft('Gesperrt');
       } else {
         const hours = Math.floor(diff / (1000 * 60 * 60));
-        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        setTimeLeft(`Noch ${hours}h ${mins}min`);
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        setTimeLeft(`Noch ${hours}h ${minutes}min`);
       }
     };
 
     updateTimer();
     const interval = setInterval(updateTimer, 60000);
     return () => clearInterval(interval);
-  }, [match.kickoff_time]);
-
-  const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-  const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  }, [kickoffTime]);
 
   const aiPrediction = (match.analysis?.ai_prediction || '').toLowerCase();
-  const isDeviatingFromAI = tip1X2 !== '' && (
+  const isDeviating = tip1X2 && (
     (aiPrediction.includes('home') && tip1X2 !== '1') ||
     (aiPrediction.includes('draw') && tip1X2 !== '0') ||
     (aiPrediction.includes('away') && tip1X2 !== '2')
   );
 
-  const renderList = (data: any) => {
-    if (Array.isArray(data) && data.length > 0) return data.join(' ');
-    if (typeof data === 'string' && data.length > 0) return data;
+  const renderList = (data) => {
+    if (Array.isArray(data) && data.length) return data.join(' ');
+    if (typeof data === 'string' && data) return data;
     return 'Keine Daten';
   };
 
   const handleSubmit = async () => {
     if (!tip1X2) {
-      alert('Bitte waehle einen 1X2-Tipp');
+      alert('Bitte wähle einen Tipp');
       return;
     }
 
@@ -84,22 +80,22 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         tip_over_under: tipOverUnder || null,
         tip_btts: tipBTTS || null,
         tip_double_chance: tipDoubleChance || null,
-        tip_exact_score_home: tipExactScoreHome ? parseInt(tipExactScoreHome) : null,
-        tip_exact_score_away: tipExactScoreAway ? parseInt(tipExactScoreAway) : null,
+        tip_exact_score_home: tipExactHome ? parseInt(tipExactHome) : null,
+        tip_exact_score_away: tipExactAway ? parseInt(tipExactAway) : null,
       };
 
-      const response = await fetch('https://football-ai-backend-production-0f95.up.railway.app/tips', {
+      const res = await fetch('https://football-ai-backend-production-0f95.up.railway.app/tips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tipData),
       });
 
-      if (response.ok) {
+      if (res.ok) {
         alert('Tipp gespeichert!');
         onClose();
       } else {
-        const errorText = await response.text();
-        alert('Fehler: ' + errorText);
+        const err = await res.text();
+        alert('Fehler: ' + err);
       }
     } catch (error) {
       alert('Fehler beim Speichern');
@@ -116,7 +112,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-medium text-slate-400 bg-slate-800 px-2 py-1 rounded">{leagueName}</span>
-              <span className="text-xs text-slate-500">{date} - {time} Uhr</span>
+              <span className="text-xs text-slate-500">{date} - {time}</span>
             </div>
             <h2 className="text-2xl font-bold text-white">{match.home_team_name} vs {match.away_team_name}</h2>
           </div>
@@ -145,7 +141,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
               <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Form</h3>
               <p className="text-xs text-slate-500 mb-1">Heim</p>
               <p className="text-white font-mono text-sm mb-2">{renderList(match.analysis?.form_home)}</p>
-              <p className="text-xs text-slate-500 mb-1">Auswaerts</p>
+              <p className="text-xs text-slate-500 mb-1">Auswärts</p>
               <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_away)}</p>
             </div>
 
@@ -153,7 +149,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
               <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Verletzte</h3>
               <p className="text-xs text-slate-500 mb-1">Heim</p>
               <p className="text-white text-sm mb-2">{renderList(match.analysis?.injuries_home)}</p>
-              <p className="text-xs text-slate-500 mb-1">Auswaerts</p>
+              <p className="text-xs text-slate-500 mb-1">Auswärts</p>
               <p className="text-white text-sm">{renderList(match.analysis?.injuries_away)}</p>
             </div>
 
@@ -161,8 +157,8 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
               <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">H2H</h3>
               {match.analysis?.h2h_stats && typeof match.analysis.h2h_stats === 'object' ? (
                 <>
-                  <p className="text-white text-sm">Heimsiege: {(match.analysis.h2h_stats as any).home_wins || 0}</p>
-                  <p className="text-white text-sm">Auswaertssiege: {(match.analysis.h2h_stats as any).away_wins || 0}</p>
+                  <p className="text-white text-sm">Heimsiege: {match.analysis.h2h_stats.home_wins || 0}</p>
+                  <p className="text-white text-sm">Auswärtssiege: {match.analysis.h2h_stats.away_wins || 0}</p>
                 </>
               ) : (
                 <p className="text-white text-sm">Keine Daten</p>
@@ -217,9 +213,9 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                 <div>
                   <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Doppelte Chance</label>
                   <div className="grid grid-cols-3 gap-3">
-                    {['1X', '12', 'X2'].map((option) => (
-                      <button key={option} type="button" onClick={() => setTipDoubleChance(tipDoubleChance === option ? '' : option)} className={`py-3 rounded-lg border font-bold ${tipDoubleChance === option ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
-                        {option}
+                    {['1X', '12', 'X2'].map((opt) => (
+                      <button key={opt} type="button" onClick={() => setTipDoubleChance(tipDoubleChance === opt ? '' : opt)} className={`py-3 rounded-lg border font-bold ${tipDoubleChance === opt ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+                        {opt}
                       </button>
                     ))}
                   </div>
@@ -228,13 +224,13 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                 <div>
                   <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Exaktes Ergebnis</label>
                   <div className="flex gap-3 items-center">
-                    <input type="number" min="0" max="10" value={tipExactScoreHome} onChange={(e) => setTipExactScoreHome(e.target.value)} placeholder="Heim" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center" />
+                    <input type="number" min="0" max="10" value={tipExactHome} onChange={(e) => setTipExactHome(e.target.value)} placeholder="Heim" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center" />
                     <span className="text-slate-400">:</span>
-                    <input type="number" min="0" max="10" value={tipExactScoreAway} onChange={(e) => setTipExactScoreAway(e.target.value)} placeholder="Auswaerts" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center" />
+                    <input type="number" min="0" max="10" value={tipExactAway} onChange={(e) => setTipExactAway(e.target.value)} placeholder="Auswärts" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center" />
                   </div>
                 </div>
 
-                {isDeviatingFromAI && (
+                {isDeviating && (
                   <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
                     <label className="text-sm font-semibold text-yellow-300 uppercase block mb-2">Warum gegen die KI?</label>
                     <textarea value={deviationReason} onChange={(e) => setDeviationReason(e.target.value.slice(0, 100))} placeholder="Max 100 Zeichen" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm" rows={3} />
