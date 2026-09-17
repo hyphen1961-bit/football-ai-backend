@@ -1,11 +1,11 @@
 // frontend/types.ts
 
 export interface MatchAnalysis {
-  form_home: string;
-  form_away: string;
-  injuries_home: string;
-  injuries_away: string;
-  h2h_stats: string;
+  form_home: string[] | string;
+  form_away: string[] | string;
+  injuries_home: string[] | string;
+  injuries_away: string[] | string;
+  h2h_stats: any; // Flexibel halten, da Backend mal Objekt, mal String liefern kann
   odds: Record<string, number>;
   ai_prediction: string;
   confidence_score: number;
@@ -15,7 +15,7 @@ export interface MatchAnalysis {
 export interface Match {
   id: string;
   api_fixture_id: number;
-  league_id?: number | string; // Kann Zahl ODER String sein
+  league_id?: number | string;
   league_name?: string;
   home_team_name: string;
   away_team_name: string;
@@ -25,13 +25,9 @@ export interface Match {
   analysis?: MatchAnalysis;
 }
 
-// Robuster Übersetzer - funktioniert mit Zahlen UND Strings
 export function getLeagueName(id?: number | string, name?: string): string {
   if (name && name !== 'Liga') return name;
-  
-  // In Zahl umwandeln (falls es ein String ist)
   const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
-  
   const leagueMap: Record<number, string> = {
     78: "Bundesliga",
     79: "2. Bundesliga",
@@ -43,12 +39,6 @@ export function getLeagueName(id?: number | string, name?: string): string {
     140: "La Liga",
     61: "Ligue 1"
   };
-  
-  // DEBUG: Logge was wir bekommen
-  if (typeof window !== 'undefined') {
-    console.log('🔍 getLeagueName - ID:', id, 'Typ:', typeof id, 'Numeric:', numericId, 'Ergebnis:', numericId && leagueMap[numericId]);
-  }
-  
   return numericId && leagueMap[numericId] ? leagueMap[numericId] : "Andere Liga";
 }
 
