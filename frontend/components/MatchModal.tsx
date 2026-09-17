@@ -11,7 +11,6 @@ interface MatchModalProps {
 export default function MatchModal({ match, onClose }: MatchModalProps) {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
-  
   const [tip1X2, setTip1X2] = useState<string>('');
   const [tipOverUnder, setTipOverUnder] = useState<string>('');
   const [tipBTTS, setTipBTTS] = useState<string>('');
@@ -28,13 +27,10 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   const leagueName = getLeagueName(match.league_id, match.league_name);
   
   const kickoffTime = useMemo(() => {
-    if (!match) return null;
     return new Date(match.kickoff_time);
-  }, [match?.kickoff_time]);
+  }, [match.kickoff_time]);
 
   useEffect(() => {
-    if (!match) return;
-    
     const updateTimer = () => {
       const now = new Date();
       const kickoff = new Date(match.kickoff_time);
@@ -43,7 +39,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
       
       if (minutesUntilKickoff <= 2) {
         setIsLocked(true);
-        setTimeLeft('Gespeert - Spiel beginnt bald');
+        setTimeLeft('Gesperrt');
       } else {
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -54,9 +50,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     updateTimer();
     const interval = setInterval(updateTimer, 60000);
     return () => clearInterval(interval);
-  }, [match?.kickoff_time]);
-
-  if (!match || !kickoffTime) return null;
+  }, [match.kickoff_time]);
 
   const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -76,14 +70,13 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
 
   const handleSubmit = async () => {
     if (!tip1X2) {
-      alert('Bitte waehle mindestens einen 1X2-Tipp');
+      alert('Bitte waehle einen 1X2-Tipp');
       return;
     }
 
     setIsSubmitting(true);
     
     try {
-      // HIER IST DER FIX: Wir senden 'username' statt 'user_id' und alle Tipps mit!
       const tipData = {
         username: 'Urs',
         api_fixture_id: match.api_fixture_id,
@@ -95,24 +88,21 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         tip_exact_score_away: tipExactScoreAway ? parseInt(tipExactScoreAway) : null,
       };
 
-      const backendUrl = 'https://football-ai-backend-production-0f95.up.railway.app';
-      
-      const response = await fetch(`${backendUrl}/tips`, {
+      const response = await fetch('https://football-ai-backend-production-0f95.up.railway.app/tips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tipData),
       });
 
       if (response.ok) {
-        alert('Tipp erfolgreich gespeichert!');
+        alert('Tipp gespeichert!');
         onClose();
       } else {
         const errorText = await response.text();
-        alert('Fehler beim Speichern: ' + errorText);
+        alert('Fehler: ' + errorText);
       }
     } catch (error) {
-      console.error('Fehler:', error);
-      alert('Fehler beim Speichern des Tipps');
+      alert('Fehler beim Speichern');
     } finally {
       setIsSubmitting(false);
     }
@@ -130,11 +120,10 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             </div>
             <h2 className="text-2xl font-bold text-white">{match.home_team_name} vs {match.away_team_name}</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none p-2">X</button>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white text-2xl p-2">X</button>
         </div>
 
         <div className="p-6 space-y-6">
-          
           <div className="flex justify-between items-center">
             <div className={`px-6 py-3 rounded-full text-lg font-bold border ${colorClass}`}>
               {confidence}% - {getConfidenceLabel(confidence)}
@@ -154,39 +143,27 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
               <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Form</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-slate-500">Heim</p>
-                  <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_home)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Auswaerts</p>
-                  <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_away)}</p>
-                </div>
-              </div>
+              <p className="text-xs text-slate-500 mb-1">Heim</p>
+              <p className="text-white font-mono text-sm mb-2">{renderList(match.analysis?.form_home)}</p>
+              <p className="text-xs text-slate-500 mb-1">Auswaerts</p>
+              <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_away)}</p>
             </div>
 
             <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
               <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Verletzte</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-slate-500">Heim</p>
-                  <p className="text-white text-sm">{renderList(match.analysis?.injuries_home)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Auswaerts</p>
-                  <p className="text-white text-sm">{renderList(match.analysis?.injuries_away)}</p>
-                </div>
-              </div>
+              <p className="text-xs text-slate-500 mb-1">Heim</p>
+              <p className="text-white text-sm mb-2">{renderList(match.analysis?.injuries_home)}</p>
+              <p className="text-xs text-slate-500 mb-1">Auswaerts</p>
+              <p className="text-white text-sm">{renderList(match.analysis?.injuries_away)}</p>
             </div>
 
             <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
               <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">H2H</h3>
               {match.analysis?.h2h_stats && typeof match.analysis.h2h_stats === 'object' ? (
-                <div className="space-y-1">
-                  <p className="text-white text-sm">Heimsiege: <span className="font-bold">{(match.analysis.h2h_stats as any).home_wins || 0}</span></p>
-                  <p className="text-white text-sm">Auswaertssiege: <span className="font-bold">{(match.analysis.h2h_stats as any).away_wins || 0}</span></p>
-                </div>
+                <>
+                  <p className="text-white text-sm">Heimsiege: {(match.analysis.h2h_stats as any).home_wins || 0}</p>
+                  <p className="text-white text-sm">Auswaertssiege: {(match.analysis.h2h_stats as any).away_wins || 0}</p>
+                </>
               ) : (
                 <p className="text-white text-sm">Keine Daten</p>
               )}
@@ -198,41 +175,40 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
 
             {!isLocked ? (
               <div className="space-y-6">
-                
                 <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">1X2 - Spielausgang</label>
+                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">1X2</label>
                   <div className="grid grid-cols-3 gap-3">
-                    <button type="button" onClick={() => setTip1X2('1')} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tip1X2 === '1' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                    <button type="button" onClick={() => setTip1X2('1')} className={`py-3 rounded-lg border font-bold ${tip1X2 === '1' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                       1 - {match.home_team_name}
                     </button>
-                    <button type="button" onClick={() => setTip1X2('0')} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tip1X2 === '0' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                    <button type="button" onClick={() => setTip1X2('0')} className={`py-3 rounded-lg border font-bold ${tip1X2 === '0' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                       0 - Unentschieden
                     </button>
-                    <button type="button" onClick={() => setTip1X2('2')} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tip1X2 === '2' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                    <button type="button" onClick={() => setTip1X2('2')} className={`py-3 rounded-lg border font-bold ${tip1X2 === '2' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                       2 - {match.away_team_name}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Over/Under 2.5 Tore</label>
+                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Over/Under 2.5</label>
                   <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setTipOverUnder(tipOverUnder === 'Over' ? '' : 'Over')} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tipOverUnder === 'Over' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                    <button type="button" onClick={() => setTipOverUnder(tipOverUnder === 'Over' ? '' : 'Over')} className={`py-3 rounded-lg border font-bold ${tipOverUnder === 'Over' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                       Over 2.5
                     </button>
-                    <button type="button" onClick={() => setTipOverUnder(tipOverUnder === 'Under' ? '' : 'Under')} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tipOverUnder === 'Under' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                    <button type="button" onClick={() => setTipOverUnder(tipOverUnder === 'Under' ? '' : 'Under')} className={`py-3 rounded-lg border font-bold ${tipOverUnder === 'Under' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                       Under 2.5
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">BTTS - Beide Teams treffen</label>
+                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">BTTS</label>
                   <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setTipBTTS(tipBTTS === 'Yes' ? '' : 'Yes')} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tipBTTS === 'Yes' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                    <button type="button" onClick={() => setTipBTTS(tipBTTS === 'Yes' ? '' : 'Yes')} className={`py-3 rounded-lg border font-bold ${tipBTTS === 'Yes' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                       Ja
                     </button>
-                    <button type="button" onClick={() => setTipBTTS(tipBTTS === 'No' ? '' : 'No')} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tipBTTS === 'No' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                    <button type="button" onClick={() => setTipBTTS(tipBTTS === 'No' ? '' : 'No')} className={`py-3 rounded-lg border font-bold ${tipBTTS === 'No' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                       Nein
                     </button>
                   </div>
@@ -242,7 +218,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                   <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Doppelte Chance</label>
                   <div className="grid grid-cols-3 gap-3">
                     {['1X', '12', 'X2'].map((option) => (
-                      <button key={option} type="button" onClick={() => setTipDoubleChance(tipDoubleChance === option ? '' : option)} className={`py-3 px-4 rounded-lg border font-bold transition-all ${tipDoubleChance === option ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+                      <button key={option} type="button" onClick={() => setTipDoubleChance(tipDoubleChance === option ? '' : option)} className={`py-3 rounded-lg border font-bold ${tipDoubleChance === option ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                         {option}
                       </button>
                     ))}
@@ -250,29 +226,29 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Exaktes Ergebnis (Optional)</label>
+                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Exaktes Ergebnis</label>
                   <div className="flex gap-3 items-center">
-                    <input type="number" min="0" max="10" value={tipExactScoreHome} onChange={(e) => setTipExactScoreHome(e.target.value)} placeholder="Heim" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center font-bold" />
-                    <span className="text-slate-400 text-xl">:</span>
-                    <input type="number" min="0" max="10" value={tipExactScoreAway} onChange={(e) => setTipExactScoreAway(e.target.value)} placeholder="Auswaerts" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center font-bold" />
+                    <input type="number" min="0" max="10" value={tipExactScoreHome} onChange={(e) => setTipExactScoreHome(e.target.value)} placeholder="Heim" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center" />
+                    <span className="text-slate-400">:</span>
+                    <input type="number" min="0" max="10" value={tipExactScoreAway} onChange={(e) => setTipExactScoreAway(e.target.value)} placeholder="Auswaerts" className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center" />
                   </div>
                 </div>
 
                 {isDeviatingFromAI && (
                   <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
-                    <label className="text-sm font-semibold text-yellow-300 uppercase block mb-2">Warum tippst du gegen die KI?</label>
-                    <textarea value={deviationReason} onChange={(e) => setDeviationReason(e.target.value.slice(0, 100))} placeholder="Dein Bauchgefuehl, Insider-Wissen, etc. (max 100 Zeichen)" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm" rows={3} />
-                    <p className="text-xs text-yellow-400 mt-2">{deviationReason.length}/100 Zeichen</p>
+                    <label className="text-sm font-semibold text-yellow-300 uppercase block mb-2">Warum gegen die KI?</label>
+                    <textarea value={deviationReason} onChange={(e) => setDeviationReason(e.target.value.slice(0, 100))} placeholder="Max 100 Zeichen" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm" rows={3} />
+                    <p className="text-xs text-yellow-400 mt-2">{deviationReason.length}/100</p>
                   </div>
                 )}
 
-                <button type="button" onClick={handleSubmit} disabled={isSubmitting || !tip1X2} className="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-lg transition-all text-lg">
-                  {isSubmitting ? 'Wird gespeichert...' : 'Tipp speichern'}
+                <button type="button" onClick={handleSubmit} disabled={isSubmitting || !tip1X2} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white font-bold py-4 rounded-lg text-lg">
+                  {isSubmitting ? 'Speichern...' : 'Tipp speichern'}
                 </button>
               </div>
             ) : (
               <div className="text-center py-8 bg-red-900/20 border border-red-500/50 rounded-lg">
-                <p className="text-red-400 font-bold text-lg">Tipps sind nur bis 2 Minuten vor Anpfiff moeglich</p>
+                <p className="text-red-400 font-bold">Gesperrt - Spiel beginnt bald</p>
               </div>
             )}
           </div>
