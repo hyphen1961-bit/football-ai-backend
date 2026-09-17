@@ -41,29 +41,38 @@ class TipInput(BaseModel):
     tip_exact_score_away: Optional[int] = None
 
 @app.get("/fixtures/next")
-def get_next_fixtures(league: int = 78, season: int = 2026, limit: int = 10):
+def get_next_fixtures():
     """
-    Holt nächste Spiele von API-Football und speichert sie in Supabase
+    Debug: Zeigt ALLE verfügbaren Daten von API-Football
     """
     try:
-        # 1. Von API-Football holen
-        response = httpx.get(
-            f"https://v3.football.api-sports.io/fixtures?league={league}&season={season}&next={limit}",
+        # Test 1: Aktuelle Bundesliga Spiele (2026)
+        response_2026 = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=78&season=2026&next=10",
             headers=api_headers,
             timeout=10.0
         )
         
-        if response.status_code != 200:
-            print(f"❌ API-Football Fehler: {response.status_code}")
-            return {"error": "API request failed", "status": response.status_code}
+        # Test 2: Vielleicht 2025?
+        response_2025 = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=78&season=2025&next=10",
+            headers=api_headers,
+            timeout=10.0
+        )
         
-        data = response.json()
-        fixtures = data.get('response', [])
+        data_2026 = response_2026.json()
+        data_2025 = response_2025.json()
         
-        print(f"✅ {len(fixtures)} Spiele von API-Football geholt")
+        fixtures_2026 = data_2026.get('response', [])
+        fixtures_2025 = data_2025.get('response', [])
         
-        # 2. In Supabase speichern
-        for fixture in fixtures:
+        # In Supabase speichern (2025 oder 2026 - was auch immer funktioniert)
+        fixtures_to_save = fixtures_2026 if len(fixtures_2026) > 0 else fixtures_2025
+        season_used = 2026 if len(fixtures_2026) > 0 else 2025
+        
+        print(f"✅ {len(fixtures_to_save)} Spiele für Saison {season_used} gefunden")
+        
+        for fixture in fixtures_to_save:
             match_data = {
                 "api_fixture_id": fixture['fixture']['id'],
                 "league_id": fixture['league']['id'],
@@ -77,17 +86,20 @@ def get_next_fixtures(league: int = 78, season: int = 2026, limit: int = 10):
                 "status": fixture['fixture']['status']['short']
             }
             
-            # Upsert = Einfügen oder aktualisieren wenn schon vorhanden
             supabase.table('matches').upsert(match_data, on_conflict='api_fixture_id').execute()
-            print(f" Gespeichert: {match_data['home_team_name']} vs {match_data['away_team_name']}")
+            print(f"  ✓ {match_data['home_team_name']} vs {match_data['away_team_name']} ({fixture['fixture']['date']})")
         
-        # 3. Zurückgeben
-        return fixtures
+        return {
+            "season_2026_count": len(fixtures_2026),
+            "season_2025_count": len(fixtures_2025),
+            "used_season": season_used,
+            "fixtures": fixtures_to_save
+        }
         
     except Exception as e:
-        print(f"❌ Fehler beim Laden der Spiele: {e}")
+        print(f" Fehler: {e}")
         return {"error": str(e)}
-    
+        
 @app.post("/analyze/{fixture_id}")
 def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
     print(f"🧠 Starte KI-Analyse für Fixture {fixture_id}...")
