@@ -340,21 +340,14 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                 )}
 
                 <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !tip1X2}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-lg transition-all text-lg"
-                >
-                  {isSubmitting ? 'Wird gespeichert...' : 'Tipp speichern'}
-                </button>
-              </div>
-            ) : (
-              <div className="text-center py-8 bg-red-900/20 border border-red-500/50 rounded-lg">
-                <p className="text-red-400 font-bold text-lg">Tipps sind nur bis 2 Minuten vor Anpfiff moeglich</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+const tipData = {
+  username: 'Urs',
+  api_fixture_id: match.api_fixture_id,
+  predicted_winner: tip1X2,  // ← WICHTIG!
+  tip_over_under: tipOverUnder || null,
+  tip_btts: tipBTTS || null,
+  tip_double_chance: tipDoubleChance || null,
+  tip_exact_score_home: tipExactScoreHome ? parseInt(tipExactScoreHome) : null,
+  tip_exact_score_away: tipExactScoreAway ? parseInt(tipExactScoreAway) : null,
+};
 }
