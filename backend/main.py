@@ -30,6 +30,8 @@ api_headers = {
     "x-rapidapi-host": "v3.football.api-sports.io"
 }
 
+# ============ MODELS ============
+
 class TipInput(BaseModel):
     username: str
     api_fixture_id: int
@@ -40,14 +42,23 @@ class TipInput(BaseModel):
     tip_exact_score_home: Optional[int] = None
     tip_exact_score_away: Optional[int] = None
 
+class MatchResultInput(BaseModel):
+    api_fixture_id: int
+    home_score: int
+    away_score: int
+    status: str = "FT"
+
+# ============ HEALTH CHECK ============
+
+@app.get("/")
+def read_root():
+    return {"message": "Football AI API is running!", "status": "healthy"}
+
+# ============ FIXTURES ============
+
 @app.get("/fixtures/next")
 def get_next_fixtures():
-    """
-    Debug: Testet verschiedene Saisons und Ligen
-    """
     results = {}
-    
-    # Test 1: Bundesliga 2024 (sollte funktionieren)
     try:
         r1 = httpx.get(
             "https://v3.football.api-sports.io/fixtures?league=78&season=2024&next=5",
@@ -57,12 +68,11 @@ def get_next_fixtures():
         results["bundesliga_2024"] = {
             "status": r1.status_code,
             "count": len(r1.json().get('response', [])),
-            "data": r1.json().get('response', [])[:2]  # Nur erste 2 Spiele
+            "data": r1.json().get('response', [])[:2]
         }
     except Exception as e:
         results["bundesliga_2024"] = {"error": str(e)}
     
-    # Test 2: Bundesliga 2025
     try:
         r2 = httpx.get(
             "https://v3.football.api-sports.io/fixtures?league=78&season=2025&next=5",
@@ -77,46 +87,13 @@ def get_next_fixtures():
     except Exception as e:
         results["bundesliga_2025"] = {"error": str(e)}
     
-    # Test 3: Premier League 2024 (andere Liga)
-    try:
-        r3 = httpx.get(
-            "https://v3.football.api-sports.io/fixtures?league=39&season=2024&next=5",
-            headers=api_headers,
-            timeout=10.0
-        )
-        data = r3.json().get('response', [])
-        results["premier_league_2024"] = {
-            "status": r3.status_code,
-            "count": len(data),
-            "data": data[:2]
-        }
-        
-        # Wenn wir Spiele finden, speichern wir sie!
-        if len(data) > 0:
-            print(f"✅ {len(data)} Premier League Spiele gefunden!")
-            for fixture in data:
-                match_data = {
-                    "api_fixture_id": fixture['fixture']['id'],
-                    "league_id": fixture['league']['id'],
-                    "season": fixture['league']['year'],
-                    "round": fixture['league']['round'],
-                    "home_team_id": fixture['teams']['home']['id'],
-                    "home_team_name": fixture['teams']['home']['name'],
-                    "away_team_id": fixture['teams']['away']['id'],
-                    "away_team_name": fixture['teams']['away']['name'],
-                    "kickoff_time": fixture['fixture']['date'],
-                    "status": fixture['fixture']['status']['short']
-                }
-                supabase.table('matches').upsert(match_data, on_conflict='api_fixture_id').execute()
-                print(f"  ✓ {match_data['home_team_name']} vs {match_data['away_team_name']}")
-    except Exception as e:
-        results["premier_league_2024"] = {"error": str(e)}
-    
     return results
-        
+
+# ============ ANALYSIS ============
+
 @app.post("/analyze/{fixture_id}")
 def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
-    print(f"🧠 Starte KI-Analyse für Fixture {fixture_id}...")
+    print(f"Starte KI-Analyse für Fixture {fixture_id}...")
     
     form_home = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_home_id}&last=5", headers=api_headers).json()
     form_away = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_away_id}&last=5", headers=api_headers).json()
@@ -197,31 +174,25 @@ def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
         "fixture_id": fixture_id,
         "prediction": prediction,
         "confidence_score": score,
-        "message": f"✅ Analyse gespeichert! KI tippt: {prediction} ({score}% Confidence)"
+        "message": f"Analyse gespeichert! KI tippt: {prediction} ({score}% Confidence)"
     }
+
+# ============ MATCHES ============
 
 @app.get("/matches")
 async def get_matches():
-    """
-    Holt alle Spiele MIT ihren KI-Analysen
-    """
     try:
-        # 1. Alle Spiele holen
         matches_response = supabase.table("matches").select("*").execute()
         matches = matches_response.data
         
-        # 2. Für jedes Spiel die Analyse holen und zusammenfügen
         matches_with_analysis = []
         for match in matches:
-            # Analyse für dieses Spiel holen (über api_fixture_id)
             analysis_response = supabase.table("match_analysis").select("*").eq(
                 "api_fixture_id", 
                 match["api_fixture_id"]
             ).execute()
-            
             analysis = analysis_response.data[0] if analysis_response.data else None
             
-            # Spiel + Analyse kombinieren
             match_with_analysis = {
                 **match,
                 "analysis": analysis
@@ -229,9 +200,8 @@ async def get_matches():
             matches_with_analysis.append(match_with_analysis)
         
         return matches_with_analysis
-        
     except Exception as e:
-        print(f"❌ Fehler beim Laden der Spiele: {e}")
+        print(f"Fehler beim Laden der Spiele: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/analysis/{fixture_id}")
@@ -241,9 +211,11 @@ def get_analysis(fixture_id: int):
         raise HTTPException(status_code=404, detail="Keine Analyse gefunden")
     return result.data[0]
 
+# ============ TIPS ============
+
 @app.post("/tips")
 def submit_tip(tip: TipInput):
-    print(f"📝 Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
+    print(f"Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
     
     user_check = supabase.table('users').select('id').eq('username', tip.username).execute()
     if not user_check.data:
@@ -251,7 +223,7 @@ def submit_tip(tip: TipInput):
         user_id = supabase.table('users').select('id').eq('username', tip.username).execute().data[0]['id']
     else:
         user_id = user_check.data[0]['id']
-
+    
     tip_data = {
         "user_id": user_id,
         "api_fixture_id": tip.api_fixture_id,
@@ -267,213 +239,13 @@ def submit_tip(tip: TipInput):
     
     supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
     
-    return {"message": f"✅ Tipp von {tip.username} gespeichert!", "tip": tip_data}
+    return {"message": f"Tipp von {tip.username} gespeichert!", "tip": tip_data}
 
 # ============ RANKING & SCORES ============
 
-class MatchResultInput(BaseModel):
-    api_fixture_id: int
-    home_score: int
-    away_score: int
-    status: str = "FT"
-
 @app.post("/match-results")
 def save_match_result(result: MatchResultInput):
-    """
-    Speichert das tatsächliche Ergebnis eines Spiels
-    """
     try:
-        # Ergebnis in match_results speichern
-        result_data = {
-            "api_fixture_id": result.api_fixture_id,
-            "home_score": result.home_score,
-            "away_score": result.away_score,
-            "status": result.status
-        }
-        
-        supabase.table('match_results').upsert(
-            result_data, 
-            on_conflict='api_fixture_id'
-        ).execute()
-        
-        # Scores berechnen und aktualisieren
-        calculate_and_update_scores(result.api_fixture_id)
-        
-        return {"message": f"✅ Ergebnis gespeichert: {result.home_score}:{result.away_score}"}
-        
-    except Exception as e:
-        print(f"❌ Fehler beim Speichern des Ergebnisses: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-def calculate_and_update_scores(fixture_id: int):
-    """
-    Berechnet Punkte für alle User basierend auf dem Spielergebnis
-    """
-    print(f"🏆 Berechne Scores für Fixture {fixture_id}...")
-    
-    # 1. Tatsächliches Ergebnis holen
-    result = supabase.table('match_results').select('*').eq('api_fixture_id', fixture_id).execute()
-    if not result.data:
-        print("❌ Kein Ergebnis gefunden")
-        return
-    
-    actual_result = result.data[0]
-    actual_home = actual_result['home_score']
-    actual_away = actual_result['away_score']
-    
-    # 2. Bestimmen wer gewonnen hat
-    if actual_home > actual_away:
-        winner = "1"  # Heim
-    elif actual_away > actual_home:
-        winner = "2"  # Auswärts
-    else:
-        winner = "0"  # Unentschieden
-    
-    # 3. KI-Vorhersage holen
-    ki_analysis = supabase.table('match_analysis').select('*').eq('api_fixture_id', fixture_id).execute()
-    ki_prediction = ki_analysis.data[0]['ai_prediction'].lower() if ki_analysis.data else ""
-    
-    # 4. Alle Tipps für dieses Spiel holen
-    tips = supabase.table('user_tips').select('''
-        *,
-        users (
-            id,
-            username
-        )
-    ''').eq('api_fixture_id', fixture_id).execute()
-    
-    print(f"  📊 {len(tips.data)} Tipps gefunden")
-    
-    # 5. Punkte berechnen für jeden Tipp
-    for tip in tips.data:
-        user_id = tip['user_id']
-        username = tip['users']['username']
-        user_tip = tip['predicted_winner']
-        exact_home = tip.get('tip_exact_score_home')
-        exact_away = tip.get('tip_exact_score_away')
-        
-        points_earned = 0
-        correct_1x2 = 0
-        correct_exact = 0
-        deviation_bonus = 0
-        
-        # 1X2 richtig?
-        if user_tip == winner:
-            points_earned += 3
-            correct_1x2 = 1
-        
-        # Exaktes Ergebnis richtig?
-        if exact_home is not None and exact_away is not None:
-            if exact_home == actual_home and exact_away == actual_away:
-                points_earned += 10
-                correct_exact = 1
-        
-        # Bonus bei KI-Abweichung?
-        ki_tipped_home = ki_prediction == "home"
-        ki_tipped_away = ki_prediction == "away"
-        ki_tipped_draw = ki_prediction == "draw"
-        
-        user_tipped_home = user_tip == "1"
-        user_tipped_away = user_tip == "2"
-        user_tipped_draw = user_tip == "0"
-        
-        is_deviating = (
-            (ki_tipped_home and not user_tipped_home) or
-            (ki_tipped_away and not user_tipped_away) or
-            (ki_tipped_draw and not user_tipped_draw)
-        )
-        
-        if is_deviating and user_tip == winner:
-            points_earned += 5
-            deviation_bonus = 1
-            print(f"     {username}: +5 Bonus (gegen KI getippt und richtig!)")
-        
-        if points_earned > 0:
-            print(f"    ✅ {username}: +{points_earned} Punkte")
-        
-        # 6. User-Score aktualisieren (upsert)
-        # Erst aktuellen Score holen
-        current_score = supabase.table('user_scores').select('*').eq('user_id', user_id).execute()
-        
-        if current_score.data:
-            # Update
-            score_data = current_score.data[0]
-            new_total = score_data['total_points'] + points_earned
-            new_correct_1x2 = score_data['correct_1x2'] + correct_1x2
-            new_correct_exact = score_data['correct_exact_score'] + correct_exact
-            new_deviation = score_data['correct_with_deviation'] + deviation_bonus
-            new_tips = score_data['tips_count'] + 1
-            
-            # Streak-Logik
-            new_streak = score_data['current_streak'] + 1 if points_earned > 0 else 0
-            best_streak = max(score_data['best_streak'], new_streak)
-            
-            supabase.table('user_scores').update({
-                'total_points': new_total,
-                'correct_1x2': new_correct_1x2,
-                'correct_exact_score': new_correct_exact,
-                'correct_with_deviation': new_deviation,
-                'current_streak': new_streak,
-                'best_streak': best_streak,
-                'tips_count': new_tips,
-                'updated_at': 'now()'
-            }).eq('user_id', user_id).execute()
-        else:
-            # Insert (neuer User)
-            supabase.table('user_scores').insert({
-                'user_id': user_id,
-                'username': username,
-                'total_points': points_earned,
-                'correct_1x2': correct_1x2,
-                'correct_exact_score': correct_exact,
-                'correct_with_deviation': deviation_bonus,
-                'current_streak': 1 if points_earned > 0 else 0,
-                'best_streak': 1 if points_earned > 0 else 0,
-                'tips_count': 1,
-                'updated_at': 'now()'
-            }).execute()
-
-@app.get("/ranking")
-def get_ranking():
-    """
-    Holt das aktuelle Leaderboard
-    """
-    try:
-        ranking = supabase.table('user_scores').select('*').order('total_points', desc=True).execute()
-        return ranking.data
-    except Exception as e:
-        print(f"❌ Fehler beim Laden des Rankings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/user/{user_id}/stats")
-def get_user_stats(user_id: str):
-    """
-    Holt detaillierte Stats für einen User
-    """
-    try:
-        stats = supabase.table('user_scores').select('*').eq('user_id', user_id).execute()
-        if not stats.data:
-            raise HTTPException(status_code=404, detail="User nicht gefunden")
-        return stats.data[0]
-    except Exception as e:
-        print(f"❌ Fehler beim Laden der User-Stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # ============ RANKING & SCORES ============
-
-class MatchResultInput(BaseModel):
-    api_fixture_id: int
-    home_score: int
-    away_score: int
-    status: str = "FT"
-
-@app.post("/match-results")
-def save_match_result(result: MatchResultInput):
-    """
-    Speichert das tatsächliche Ergebnis eines Spiels und berechnet die Punkte.
-    """
-    try:
-        # 1. Ergebnis in match_results speichern
         result_data = {
             "api_fixture_id": result.api_fixture_id,
             "home_score": result.home_score,
@@ -481,26 +253,27 @@ def save_match_result(result: MatchResultInput):
             "status": result.status
         }
         supabase.table('match_results').upsert(result_data, on_conflict='api_fixture_id').execute()
-        
-        # 2. Punkte berechnen (Vereinfachte Version für den Start)
-        # Hier würden wir normalerweise calculate_and_update_scores() aufrufen.
-        # Für den ersten Test geben wir einfach eine Erfolgsmeldung zurück.
-        
-        return {"message": f"✅ Ergebnis gespeichert: {result.home_score}:{result.away_score}"}
-        
+        return {"message": f"Ergebnis gespeichert: {result.home_score}:{result.away_score}"}
     except Exception as e:
-        print(f"❌ Fehler beim Speichern des Ergebnisses: {e}")
+        print(f"Fehler beim Speichern des Ergebnisses: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/ranking")
 def get_ranking():
-    """
-    Holt das aktuelle Leaderboard aus der user_scores Tabelle.
-    """
     try:
-        # Wir holen alle User-Scores, sortiert nach den meisten Punkten
         ranking = supabase.table('user_scores').select('*').order('total_points', desc=True).execute()
         return ranking.data if ranking.data else []
     except Exception as e:
-        print(f"❌ Fehler beim Laden des Rankings: {e}")
+        print(f"Fehler beim Laden des Rankings: {e}")
         return []
+
+@app.get("/user/{user_id}/stats")
+def get_user_stats(user_id: str):
+    try:
+        stats = supabase.table('user_scores').select('*').eq('user_id', user_id).execute()
+        if not stats.data:
+            raise HTTPException(status_code=404, detail="User nicht gefunden")
+        return stats.data[0]
+    except Exception as e:
+        print(f"Fehler beim Laden der User-Stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
