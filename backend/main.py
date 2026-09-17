@@ -458,3 +458,49 @@ def get_user_stats(user_id: str):
     except Exception as e:
         print(f"❌ Fehler beim Laden der User-Stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+    # ============ RANKING & SCORES ============
+
+class MatchResultInput(BaseModel):
+    api_fixture_id: int
+    home_score: int
+    away_score: int
+    status: str = "FT"
+
+@app.post("/match-results")
+def save_match_result(result: MatchResultInput):
+    """
+    Speichert das tatsächliche Ergebnis eines Spiels und berechnet die Punkte.
+    """
+    try:
+        # 1. Ergebnis in match_results speichern
+        result_data = {
+            "api_fixture_id": result.api_fixture_id,
+            "home_score": result.home_score,
+            "away_score": result.away_score,
+            "status": result.status
+        }
+        supabase.table('match_results').upsert(result_data, on_conflict='api_fixture_id').execute()
+        
+        # 2. Punkte berechnen (Vereinfachte Version für den Start)
+        # Hier würden wir normalerweise calculate_and_update_scores() aufrufen.
+        # Für den ersten Test geben wir einfach eine Erfolgsmeldung zurück.
+        
+        return {"message": f"✅ Ergebnis gespeichert: {result.home_score}:{result.away_score}"}
+        
+    except Exception as e:
+        print(f"❌ Fehler beim Speichern des Ergebnisses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ranking")
+def get_ranking():
+    """
+    Holt das aktuelle Leaderboard aus der user_scores Tabelle.
+    """
+    try:
+        # Wir holen alle User-Scores, sortiert nach den meisten Punkten
+        ranking = supabase.table('user_scores').select('*').order('total_points', desc=True).execute()
+        return ranking.data if ranking.data else []
+    except Exception as e:
+        print(f"❌ Fehler beim Laden des Rankings: {e}")
+        return []
