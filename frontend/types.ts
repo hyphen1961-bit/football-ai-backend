@@ -1,4 +1,3 @@
-
 // frontend/types.ts
 
 export interface MatchAnalysis {
@@ -16,13 +15,33 @@ export interface MatchAnalysis {
 export interface Match {
   id: string;
   api_fixture_id: number;
+  league_id?: number;       // NEU: Die ID vom Backend
+  league_name?: string;     // Fallback, falls das Backend doch mal einen Namen schickt
   home_team_name: string;
   away_team_name: string;
-  league_name: string;
   kickoff_time: string;
   status: string;
   is_tipped_by_user?: boolean;
   analysis?: MatchAnalysis;
+}
+
+// Übersetzer für Liga-IDs zu Namen
+export function getLeagueName(id?: number, name?: string): string {
+  if (name) return name; // Falls Backend mal einen Namen liefert
+  
+  const leagueMap: Record<number, string> = {
+    78: "Bundesliga",
+    79: "2. Bundesliga",
+    2: "Champions League",
+    3: "Europa League",
+    207: "Super League", // Schweiz
+    39: "Premier League",
+    135: "Serie A",
+    140: "La Liga",
+    61: "Ligue 1"
+  };
+  
+  return id && leagueMap[id] ? leagueMap[id] : "Andere Liga";
 }
 
 export function getConfidenceColor(score: number): string {
