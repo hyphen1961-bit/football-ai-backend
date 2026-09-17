@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Match, getConfidenceColor, getConfidenceLabel, getLeagueName } from '@/types';
 
 interface MatchModalProps {
@@ -12,7 +12,6 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
   
-  // Tip states
   const [tip1X2, setTip1X2] = useState<string>('');
   const [tipOverUnder, setTipOverUnder] = useState<string>('');
   const [tipBTTS, setTipBTTS] = useState<string>('');
@@ -27,15 +26,18 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   const confidence = match.analysis?.confidence_score || 0;
   const colorClass = getConfidenceColor(confidence);
   const leagueName = getLeagueName(match.league_id, match.league_name);
-  const kickoffTime = new Date(match.kickoff_time);
+  
+  // FIX: kickoffTime mit useMemo memoisieren (verhindert Endlos-Loop)
+  const kickoffTime = useMemo(() => new Date(match.kickoff_time), [match.kickoff_time]);
   const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // Countdown Timer - 2 Minuten vor Anpfiff sperren
+  // FIX: String als Dependency verwenden (stabil!)
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
-      const diff = kickoffTime.getTime() - now.getTime();
+      const kickoff = new Date(match.kickoff_time);
+      const diff = kickoff.getTime() - now.getTime();
       const minutesUntilKickoff = Math.floor(diff / (1000 * 60));
       
       if (minutesUntilKickoff <= 2) {
@@ -49,16 +51,17 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     };
 
     updateTimer();
-    const interval = setInterval(updateTimer, 60000); // Jede Minute aktualisieren
+    const interval = setInterval(updateTimer, 60000);
     return () => clearInterval(interval);
-  }, [kickoffTime]);
+  }, [match.kickoff_time]);
 
-  // Prüfen ob User gegen KI tippt
-  const aiPrediction = match.analysis?.ai_prediction?.toLowerCase() || '';
-  const isDeviatingFromAI = 
+  // FIX: Sicherer Zugriff auf ai_prediction
+  const aiPrediction = (match.analysis?.ai_prediction || '').toLowerCase();
+  const isDeviatingFromAI = tip1X2 !== '' && (
     (aiPrediction.includes('home') && tip1X2 !== '1') ||
     (aiPrediction.includes('draw') && tip1X2 !== '0') ||
-    (aiPrediction.includes('away') && tip1X2 !== '2');
+    (aiPrediction.includes('away') && tip1X2 !== '2')
+  );
 
   const renderList = (data: any) => {
     if (Array.isArray(data) && data.length > 0) return data.join(' ');
@@ -76,7 +79,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     
     try {
       const tipData = {
-        user_id: '1', // TODO: Echte User-ID wenn Login implementiert
+        user_id: '1',
         api_fixture_id: match.api_fixture_id,
         predicted_winner: tip1X2,
         tip_over_under: tipOverUnder || null,
@@ -87,7 +90,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         deviation_reason: deviationReason || null,
       };
 
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://football-ai-backend-production-0f95.up.railway.app';
+      const backendUrl = 'https://football-ai-backend-production-0f95.up.railway.app';
       
       const response = await fetch(`${backendUrl}/tips`, {
         method: 'POST',
@@ -99,7 +102,8 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         alert('Tipp erfolgreich gespeichert!');
         onClose();
       } else {
-        alert('Fehler beim Speichern des Tipps');
+        const errorText = await response.text();
+        alert('Fehler beim Speichern: ' + errorText);
       }
     } catch (error) {
       console.error('Fehler:', error);
@@ -113,7 +117,6 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         
-        {/* Header */}
         <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-start">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -122,250 +125,4 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             </div>
             <h2 className="text-2xl font-bold text-white">{match.home_team_name} vs {match.away_team_name}</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none p-2">X</button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          
-          {/* Confidence & Timer */}
-          <div className="flex justify-between items-center">
-            <div className={`px-6 py-3 rounded-full text-lg font-bold border ${colorClass}`}>
-              {confidence}% - {getConfidenceLabel(confidence)}
-            </div>
-            <div className={`text-sm font-mono ${isLocked ? 'text-red-400' : 'text-green-400'}`}>
-              {timeLeft}
-            </div>
-          </div>
-
-          {/* KI Prediction */}
-          {match.analysis?.ai_prediction && (
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">KI-Vorhersage</h3>
-              <p className="text-xl font-bold text-white">{match.analysis.ai_prediction}</p>
-            </div>
-          )}
-
-          {/* 3 Indizien */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Form</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-slate-500">Heim</p>
-                  <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_home)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Auswaerts</p>
-                  <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_away)}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Verletzte</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-slate-500">Heim</p>
-                  <p className="text-white text-sm">{renderList(match.analysis?.injuries_home)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Auswaerts</p>
-                  <p className="text-white text-sm">{renderList(match.analysis?.injuries_away)}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">H2H</h3>
-              {match.analysis?.h2h_stats && typeof match.analysis.h2h_stats === 'object' ? (
-                <div className="space-y-1">
-                  <p className="text-white text-sm">Heimsiege: <span className="font-bold">{(match.analysis.h2h_stats as any).home_wins || 0}</span></p>
-                  <p className="text-white text-sm">Auswaertssiege: <span className="font-bold">{(match.analysis.h2h_stats as any).away_wins || 0}</span></p>
-                </div>
-              ) : (
-                <p className="text-white text-sm">Keine Daten</p>
-              )}
-            </div>
-          </div>
-
-          {/* WETTMÄRKTE */}
-          <div className="border-t border-slate-800 pt-6">
-            <h3 className="text-lg font-bold text-white mb-4">Dein Tipp</h3>
-
-            {!isLocked ? (
-              <div className="space-y-6">
-                
-                {/* 1X2 */}
-                <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">1X2 - Spielausgang</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    <button
-                      onClick={() => setTip1X2('1')}
-                      className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                        tip1X2 === '1' 
-                          ? 'bg-indigo-600 border-indigo-500 text-white' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      1 - {match.home_team_name}
-                    </button>
-                    <button
-                      onClick={() => setTip1X2('0')}
-                      className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                        tip1X2 === '0' 
-                          ? 'bg-indigo-600 border-indigo-500 text-white' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      0 - Unentschieden
-                    </button>
-                    <button
-                      onClick={() => setTip1X2('2')}
-                      className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                        tip1X2 === '2' 
-                          ? 'bg-indigo-600 border-indigo-500 text-white' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      2 - {match.away_team_name}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Over/Under 2.5 */}
-                <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Over/Under 2.5 Tore</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => setTipOverUnder(tipOverUnder === 'Over' ? '' : 'Over')}
-                      className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                        tipOverUnder === 'Over' 
-                          ? 'bg-indigo-600 border-indigo-500 text-white' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      Over 2.5
-                    </button>
-                    <button
-                      onClick={() => setTipOverUnder(tipOverUnder === 'Under' ? '' : 'Under')}
-                      className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                        tipOverUnder === 'Under' 
-                          ? 'bg-indigo-600 border-indigo-500 text-white' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      Under 2.5
-                    </button>
-                  </div>
-                </div>
-
-                {/* BTTS */}
-                <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">BTTS - Beide Teams treffen</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => setTipBTTS(tipBTTS === 'Yes' ? '' : 'Yes')}
-                      className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                        tipBTTS === 'Yes' 
-                          ? 'bg-indigo-600 border-indigo-500 text-white' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      Ja
-                    </button>
-                    <button
-                      onClick={() => setTipBTTS(tipBTTS === 'No' ? '' : 'No')}
-                      className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                        tipBTTS === 'No' 
-                          ? 'bg-indigo-600 border-indigo-500 text-white' 
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                      }`}
-                    >
-                      Nein
-                    </button>
-                  </div>
-                </div>
-
-                {/* Doppelte Chance */}
-                <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Doppelte Chance</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {['1X', '12', 'X2'].map((option) => (
-                      <button
-                        key={option}
-                        onClick={() => setTipDoubleChance(tipDoubleChance === option ? '' : option)}
-                        className={`py-3 px-4 rounded-lg border font-bold transition-all ${
-                          tipDoubleChance === option 
-                            ? 'bg-indigo-600 border-indigo-500 text-white' 
-                            : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Exaktes Ergebnis */}
-                <div>
-                  <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">Exaktes Ergebnis (Optional)</label>
-                  <div className="flex gap-3 items-center">
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={tipExactScoreHome}
-                      onChange={(e) => setTipExactScoreHome(e.target.value)}
-                      placeholder="Heim"
-                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center font-bold"
-                    />
-                    <span className="text-slate-400 text-xl">:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={tipExactScoreAway}
-                      onChange={(e) => setTipExactScoreAway(e.target.value)}
-                      placeholder="Auswärts"
-                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-center font-bold"
-                    />
-                  </div>
-                </div>
-
-                {/* Warum-Feld (nur bei KI-Abweichung) */}
-                {isDeviatingFromAI && (
-                  <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
-                    <label className="text-sm font-semibold text-yellow-300 uppercase block mb-2">
-                      Warum tippst du gegen die KI?
-                    </label>
-                    <textarea
-                      value={deviationReason}
-                      onChange={(e) => setDeviationReason(e.target.value.slice(0, 100))}
-                      placeholder="Dein Bauchgefühl, Insider-Wissen, etc. (max 100 Zeichen)"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm"
-                      rows={3}
-                    />
-                    <p className="text-xs text-yellow-400 mt-2">{deviationReason.length}/100 Zeichen</p>
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !tip1X2}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-lg transition-all text-lg"
-                >
-                  {isSubmitting ? 'Wird gespeichert...' : 'Tipp speichern'}
-                </button>
-              </div>
-            ) : (
-              <div className="text-center py-8 bg-red-900/20 border border-red-500/50 rounded-lg">
-                <p className="text-red-400 font-bold text-lg">Tipps sind nur bis 2 Minuten vor Anpfiff möglich</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          <button onClick={onClose} className="text-s
