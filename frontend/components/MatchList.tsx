@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Match, getConfidenceColor, getConfidenceLabel, getLeagueName } from '@/types';
 import MatchModal from './MatchModal';
 
