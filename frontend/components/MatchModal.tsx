@@ -9,16 +9,16 @@ interface MatchModalProps {
 }
 
 export default function MatchModal({ match, onClose }: MatchModalProps) {
-  const [timeLeft, setTimeLeft] = useState('');
-  const [isLocked, setIsLocked] = useState(false);
-  const [tip1X2, setTip1X2] = useState('');
-  const [tipOverUnder, setTipOverUnder] = useState('');
-  const [tipBTTS, setTipBTTS] = useState('');
-  const [tipDoubleChance, setTipDoubleChance] = useState('');
-  const [tipExactHome, setTipExactHome] = useState('');
-  const [tipExactAway, setTipExactAway] = useState('');
-  const [deviationReason, setDeviationReason] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [tip1X2, setTip1X2] = useState<string>('');
+  const [tipOverUnder, setTipOverUnder] = useState<string>('');
+  const [tipBTTS, setTipBTTS] = useState<string>('');
+  const [tipDoubleChance, setTipDoubleChance] = useState<string>('');
+  const [tipExactHome, setTipExactHome] = useState<string>('');
+  const [tipExactAway, setTipExactAway] = useState<string>('');
+  const [deviationReason, setDeviationReason] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!match) return null;
 
@@ -52,21 +52,22 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   }, [kickoffTime]);
 
   const aiPrediction = (match.analysis?.ai_prediction || '').toLowerCase();
-  const isDeviating = tip1X2 && (
+  const isDeviating = tip1X2 !== '' && (
     (aiPrediction.includes('home') && tip1X2 !== '1') ||
     (aiPrediction.includes('draw') && tip1X2 !== '0') ||
     (aiPrediction.includes('away') && tip1X2 !== '2')
   );
 
-  const renderList = (data) => {
-    if (Array.isArray(data) && data.length) return data.join(' ');
-    if (typeof data === 'string' && data) return data;
+  // FIX: Explizit 'any' definieren, damit TypeScript nicht meckert
+  const renderList = (data: any) => {
+    if (Array.isArray(data) && data.length > 0) return data.join(' ');
+    if (typeof data === 'string' && data.length > 0) return data;
     return 'Keine Daten';
   };
 
   const handleSubmit = async () => {
     if (!tip1X2) {
-      alert('Bitte wähle einen Tipp');
+      alert('Bitte wähle einen 1X2-Tipp');
       return;
     }
 
@@ -157,8 +158,8 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
               <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">H2H</h3>
               {match.analysis?.h2h_stats && typeof match.analysis.h2h_stats === 'object' ? (
                 <>
-                  <p className="text-white text-sm">Heimsiege: {match.analysis.h2h_stats.home_wins || 0}</p>
-                  <p className="text-white text-sm">Auswärtssiege: {match.analysis.h2h_stats.away_wins || 0}</p>
+                  <p className="text-white text-sm">Heimsiege: {(match.analysis.h2h_stats as any).home_wins || 0}</p>
+                  <p className="text-white text-sm">Auswärtssiege: {(match.analysis.h2h_stats as any).away_wins || 0}</p>
                 </>
               ) : (
                 <p className="text-white text-sm">Keine Daten</p>
