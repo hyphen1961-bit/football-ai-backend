@@ -9,9 +9,9 @@ interface MatchModalProps {
 }
 
 export default function MatchModal({ match, onClose }: MatchModalProps) {
+  // ALLE HOOKS MÜSSEN GANZ OBEN STEHEN (vor jedem early return!)
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isLocked, setIsLocked] = useState(false);
-  
   const [tip1X2, setTip1X2] = useState<string>('');
   const [tipOverUnder, setTipOverUnder] = useState<string>('');
   const [tipBTTS, setTipBTTS] = useState<string>('');
@@ -21,19 +21,15 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   const [deviationReason, setDeviationReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!match) return null;
+  // useMemo kommt VOR dem early return
+  const kickoffTime = useMemo(() => {
+    if (!match) return null;
+    return new Date(match.kickoff_time);
+  }, [match?.kickoff_time]);
 
-  const confidence = match.analysis?.confidence_score || 0;
-  const colorClass = getConfidenceColor(confidence);
-  const leagueName = getLeagueName(match.league_id, match.league_name);
-  
-  // FIX: kickoffTime mit useMemo memoisieren (verhindert Endlos-Loop)
-  const kickoffTime = useMemo(() => new Date(match.kickoff_time), [match.kickoff_time]);
-  const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-  const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-
-  // FIX: String als Dependency verwenden (stabil!)
   useEffect(() => {
+    if (!match) return;
+    
     const updateTimer = () => {
       const now = new Date();
       const kickoff = new Date(match.kickoff_time);
@@ -53,9 +49,17 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     updateTimer();
     const interval = setInterval(updateTimer, 60000);
     return () => clearInterval(interval);
-  }, [match.kickoff_time]);
+  }, [match?.kickoff_time]);
 
-  // FIX: Sicherer Zugriff auf ai_prediction
+  // JETZT erst der early return
+  if (!match || !kickoffTime) return null;
+
+  const confidence = match.analysis?.confidence_score || 0;
+  const colorClass = getConfidenceColor(confidence);
+  const leagueName = getLeagueName(match.league_id, match.league_name);
+  const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+
   const aiPrediction = (match.analysis?.ai_prediction || '').toLowerCase();
   const isDeviatingFromAI = tip1X2 !== '' && (
     (aiPrediction.includes('home') && tip1X2 !== '1') ||
