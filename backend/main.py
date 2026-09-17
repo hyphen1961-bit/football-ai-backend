@@ -268,3 +268,193 @@ def submit_tip(tip: TipInput):
     supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
     
     return {"message": f"✅ Tipp von {tip.username} gespeichert!", "tip": tip_data}
+
+# ============ RANKING & SCORES ============
+
+class MatchResultInput(BaseModel):
+    api_fixture_id: int
+    home_score: int
+    away_score: int
+    status: str = "FT"
+
+@app.post("/match-results")
+def save_match_result(result: MatchResultInput):
+    """
+    Speichert das tatsächliche Ergebnis eines Spiels
+    """
+    try:
+        # Ergebnis in match_results speichern
+        result_data = {
+            "api_fixture_id": result.api_fixture_id,
+            "home_score": result.home_score,
+            "away_score": result.away_score,
+            "status": result.status
+        }
+        
+        supabase.table('match_results').upsert(
+            result_data, 
+            on_conflict='api_fixture_id'
+        ).execute()
+        
+        # Scores berechnen und aktualisieren
+        calculate_and_update_scores(result.api_fixture_id)
+        
+        return {"message": f"✅ Ergebnis gespeichert: {result.home_score}:{result.away_score}"}
+        
+    except Exception as e:
+        print(f"❌ Fehler beim Speichern des Ergebnisses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def calculate_and_update_scores(fixture_id: int):
+    """
+    Berechnet Punkte für alle User basierend auf dem Spielergebnis
+    """
+    print(f"🏆 Berechne Scores für Fixture {fixture_id}...")
+    
+    # 1. Tatsächliches Ergebnis holen
+    result = supabase.table('match_results').select('*').eq('api_fixture_id', fixture_id).execute()
+    if not result.data:
+        print("❌ Kein Ergebnis gefunden")
+        return
+    
+    actual_result = result.data[0]
+    actual_home = actual_result['home_score']
+    actual_away = actual_result['away_score']
+    
+    # 2. Bestimmen wer gewonnen hat
+    if actual_home > actual_away:
+        winner = "1"  # Heim
+    elif actual_away > actual_home:
+        winner = "2"  # Auswärts
+    else:
+        winner = "0"  # Unentschieden
+    
+    # 3. KI-Vorhersage holen
+    ki_analysis = supabase.table('match_analysis').select('*').eq('api_fixture_id', fixture_id).execute()
+    ki_prediction = ki_analysis.data[0]['ai_prediction'].lower() if ki_analysis.data else ""
+    
+    # 4. Alle Tipps für dieses Spiel holen
+    tips = supabase.table('user_tips').select('''
+        *,
+        users (
+            id,
+            username
+        )
+    ''').eq('api_fixture_id', fixture_id).execute()
+    
+    print(f"  📊 {len(tips.data)} Tipps gefunden")
+    
+    # 5. Punkte berechnen für jeden Tipp
+    for tip in tips.data:
+        user_id = tip['user_id']
+        username = tip['users']['username']
+        user_tip = tip['predicted_winner']
+        exact_home = tip.get('tip_exact_score_home')
+        exact_away = tip.get('tip_exact_score_away')
+        
+        points_earned = 0
+        correct_1x2 = 0
+        correct_exact = 0
+        deviation_bonus = 0
+        
+        # 1X2 richtig?
+        if user_tip == winner:
+            points_earned += 3
+            correct_1x2 = 1
+        
+        # Exaktes Ergebnis richtig?
+        if exact_home is not None and exact_away is not None:
+            if exact_home == actual_home and exact_away == actual_away:
+                points_earned += 10
+                correct_exact = 1
+        
+        # Bonus bei KI-Abweichung?
+        ki_tipped_home = ki_prediction == "home"
+        ki_tipped_away = ki_prediction == "away"
+        ki_tipped_draw = ki_prediction == "draw"
+        
+        user_tipped_home = user_tip == "1"
+        user_tipped_away = user_tip == "2"
+        user_tipped_draw = user_tip == "0"
+        
+        is_deviating = (
+            (ki_tipped_home and not user_tipped_home) or
+            (ki_tipped_away and not user_tipped_away) or
+            (ki_tipped_draw and not user_tipped_draw)
+        )
+        
+        if is_deviating and user_tip == winner:
+            points_earned += 5
+            deviation_bonus = 1
+            print(f"     {username}: +5 Bonus (gegen KI getippt und richtig!)")
+        
+        if points_earned > 0:
+            print(f"    ✅ {username}: +{points_earned} Punkte")
+        
+        # 6. User-Score aktualisieren (upsert)
+        # Erst aktuellen Score holen
+        current_score = supabase.table('user_scores').select('*').eq('user_id', user_id).execute()
+        
+        if current_score.data:
+            # Update
+            score_data = current_score.data[0]
+            new_total = score_data['total_points'] + points_earned
+            new_correct_1x2 = score_data['correct_1x2'] + correct_1x2
+            new_correct_exact = score_data['correct_exact_score'] + correct_exact
+            new_deviation = score_data['correct_with_deviation'] + deviation_bonus
+            new_tips = score_data['tips_count'] + 1
+            
+            # Streak-Logik
+            new_streak = score_data['current_streak'] + 1 if points_earned > 0 else 0
+            best_streak = max(score_data['best_streak'], new_streak)
+            
+            supabase.table('user_scores').update({
+                'total_points': new_total,
+                'correct_1x2': new_correct_1x2,
+                'correct_exact_score': new_correct_exact,
+                'correct_with_deviation': new_deviation,
+                'current_streak': new_streak,
+                'best_streak': best_streak,
+                'tips_count': new_tips,
+                'updated_at': 'now()'
+            }).eq('user_id', user_id).execute()
+        else:
+            # Insert (neuer User)
+            supabase.table('user_scores').insert({
+                'user_id': user_id,
+                'username': username,
+                'total_points': points_earned,
+                'correct_1x2': correct_1x2,
+                'correct_exact_score': correct_exact,
+                'correct_with_deviation': deviation_bonus,
+                'current_streak': 1 if points_earned > 0 else 0,
+                'best_streak': 1 if points_earned > 0 else 0,
+                'tips_count': 1,
+                'updated_at': 'now()'
+            }).execute()
+
+@app.get("/ranking")
+def get_ranking():
+    """
+    Holt das aktuelle Leaderboard
+    """
+    try:
+        ranking = supabase.table('user_scores').select('*').order('total_points', desc=True).execute()
+        return ranking.data
+    except Exception as e:
+        print(f"❌ Fehler beim Laden des Rankings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/user/{user_id}/stats")
+def get_user_stats(user_id: str):
+    """
+    Holt detaillierte Stats für einen User
+    """
+    try:
+        stats = supabase.table('user_scores').select('*').eq('user_id', user_id).execute()
+        if not stats.data:
+            raise HTTPException(status_code=404, detail="User nicht gefunden")
+        return stats.data[0]
+    except Exception as e:
+        print(f"❌ Fehler beim Laden der User-Stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
