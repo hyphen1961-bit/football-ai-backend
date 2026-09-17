@@ -1,4 +1,5 @@
-// types.ts (kommt direkt in: football-ai-frontend/types.ts)
+
+// frontend/types.ts
 
 export interface MatchAnalysis {
   form_home: string;
@@ -8,7 +9,7 @@ export interface MatchAnalysis {
   h2h_stats: string;
   odds: Record<string, number>;
   ai_prediction: string;
-  confidence_score: number; // 0 - 100
+  confidence_score: number;
   context_notes: string;
 }
 
@@ -24,7 +25,6 @@ export interface Match {
   analysis?: MatchAnalysis;
 }
 
-// Helper für die Farb-Codierung
 export function getConfidenceColor(score: number): string {
   if (score >= 70) return "bg-green-500/20 text-green-400 border-green-500/50";
   if (score >= 50) return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
