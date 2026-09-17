@@ -140,9 +140,38 @@ def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
     }
 
 @app.get("/matches")
-def get_matches():
-    result = supabase.table('matches').select("*").order('kickoff_time', desc=False).execute()
-    return result.data
+async def get_matches():
+    """
+    Holt alle Spiele MIT ihren KI-Analysen
+    """
+    try:
+        # 1. Alle Spiele holen
+        matches_response = supabase.table("matches").select("*").execute()
+        matches = matches_response.data
+        
+        # 2. Für jedes Spiel die Analyse holen und zusammenfügen
+        matches_with_analysis = []
+        for match in matches:
+            # Analyse für dieses Spiel holen (über api_fixture_id)
+            analysis_response = supabase.table("match_analysis").select("*").eq(
+                "api_fixture_id", 
+                match["api_fixture_id"]
+            ).execute()
+            
+            analysis = analysis_response.data[0] if analysis_response.data else None
+            
+            # Spiel + Analyse kombinieren
+            match_with_analysis = {
+                **match,
+                "analysis": analysis
+            }
+            matches_with_analysis.append(match_with_analysis)
+        
+        return matches_with_analysis
+        
+    except Exception as e:
+        print(f"❌ Fehler beim Laden der Spiele: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/analysis/{fixture_id}")
 def get_analysis(fixture_id: int):
