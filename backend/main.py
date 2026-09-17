@@ -43,62 +43,76 @@ class TipInput(BaseModel):
 @app.get("/fixtures/next")
 def get_next_fixtures():
     """
-    Debug: Zeigt ALLE verfügbaren Daten von API-Football
+    Debug: Testet verschiedene Saisons und Ligen
     """
+    results = {}
+    
+    # Test 1: Bundesliga 2024 (sollte funktionieren)
     try:
-        # Test 1: Aktuelle Bundesliga Spiele (2026)
-        response_2026 = httpx.get(
-            "https://v3.football.api-sports.io/fixtures?league=78&season=2026&next=10",
+        r1 = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=78&season=2024&next=5",
             headers=api_headers,
             timeout=10.0
         )
-        
-        # Test 2: Vielleicht 2025?
-        response_2025 = httpx.get(
-            "https://v3.football.api-sports.io/fixtures?league=78&season=2025&next=10",
+        results["bundesliga_2024"] = {
+            "status": r1.status_code,
+            "count": len(r1.json().get('response', [])),
+            "data": r1.json().get('response', [])[:2]  # Nur erste 2 Spiele
+        }
+    except Exception as e:
+        results["bundesliga_2024"] = {"error": str(e)}
+    
+    # Test 2: Bundesliga 2025
+    try:
+        r2 = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=78&season=2025&next=5",
             headers=api_headers,
             timeout=10.0
         )
-        
-        data_2026 = response_2026.json()
-        data_2025 = response_2025.json()
-        
-        fixtures_2026 = data_2026.get('response', [])
-        fixtures_2025 = data_2025.get('response', [])
-        
-        # In Supabase speichern (2025 oder 2026 - was auch immer funktioniert)
-        fixtures_to_save = fixtures_2026 if len(fixtures_2026) > 0 else fixtures_2025
-        season_used = 2026 if len(fixtures_2026) > 0 else 2025
-        
-        print(f"✅ {len(fixtures_to_save)} Spiele für Saison {season_used} gefunden")
-        
-        for fixture in fixtures_to_save:
-            match_data = {
-                "api_fixture_id": fixture['fixture']['id'],
-                "league_id": fixture['league']['id'],
-                "season": fixture['league']['year'],
-                "round": fixture['league']['round'],
-                "home_team_id": fixture['teams']['home']['id'],
-                "home_team_name": fixture['teams']['home']['name'],
-                "away_team_id": fixture['teams']['away']['id'],
-                "away_team_name": fixture['teams']['away']['name'],
-                "kickoff_time": fixture['fixture']['date'],
-                "status": fixture['fixture']['status']['short']
-            }
-            
-            supabase.table('matches').upsert(match_data, on_conflict='api_fixture_id').execute()
-            print(f"  ✓ {match_data['home_team_name']} vs {match_data['away_team_name']} ({fixture['fixture']['date']})")
-        
-        return {
-            "season_2026_count": len(fixtures_2026),
-            "season_2025_count": len(fixtures_2025),
-            "used_season": season_used,
-            "fixtures": fixtures_to_save
+        results["bundesliga_2025"] = {
+            "status": r2.status_code,
+            "count": len(r2.json().get('response', [])),
+            "data": r2.json().get('response', [])[:2]
+        }
+    except Exception as e:
+        results["bundesliga_2025"] = {"error": str(e)}
+    
+    # Test 3: Premier League 2024 (andere Liga)
+    try:
+        r3 = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=39&season=2024&next=5",
+            headers=api_headers,
+            timeout=10.0
+        )
+        data = r3.json().get('response', [])
+        results["premier_league_2024"] = {
+            "status": r3.status_code,
+            "count": len(data),
+            "data": data[:2]
         }
         
+        # Wenn wir Spiele finden, speichern wir sie!
+        if len(data) > 0:
+            print(f"✅ {len(data)} Premier League Spiele gefunden!")
+            for fixture in data:
+                match_data = {
+                    "api_fixture_id": fixture['fixture']['id'],
+                    "league_id": fixture['league']['id'],
+                    "season": fixture['league']['year'],
+                    "round": fixture['league']['round'],
+                    "home_team_id": fixture['teams']['home']['id'],
+                    "home_team_name": fixture['teams']['home']['name'],
+                    "away_team_id": fixture['teams']['away']['id'],
+                    "away_team_name": fixture['teams']['away']['name'],
+                    "kickoff_time": fixture['fixture']['date'],
+                    "status": fixture['fixture']['status']['short']
+                }
+                supabase.table('matches').upsert(match_data, on_conflict='api_fixture_id').execute()
+                print(f"  ✓ {match_data['home_team_name']} vs {match_data['away_team_name']}")
     except Exception as e:
-        print(f" Fehler: {e}")
-        return {"error": str(e)}
+        results["premier_league_2024"] = {"error": str(e)}
+    
+    return results
         
 @app.post("/analyze/{fixture_id}")
 def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
