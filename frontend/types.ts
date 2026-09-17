@@ -15,8 +15,8 @@ export interface MatchAnalysis {
 export interface Match {
   id: string;
   api_fixture_id: number;
-  league_id?: number;       // NEU: Die ID vom Backend
-  league_name?: string;     // Fallback, falls das Backend doch mal einen Namen schickt
+  league_id?: number | string; // Kann Zahl ODER String sein
+  league_name?: string;
   home_team_name: string;
   away_team_name: string;
   kickoff_time: string;
@@ -25,23 +25,31 @@ export interface Match {
   analysis?: MatchAnalysis;
 }
 
-// Übersetzer für Liga-IDs zu Namen
-export function getLeagueName(id?: number, name?: string): string {
-  if (name) return name; // Falls Backend mal einen Namen liefert
+// Robuster Übersetzer - funktioniert mit Zahlen UND Strings
+export function getLeagueName(id?: number | string, name?: string): string {
+  if (name && name !== 'Liga') return name;
+  
+  // In Zahl umwandeln (falls es ein String ist)
+  const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
   
   const leagueMap: Record<number, string> = {
     78: "Bundesliga",
     79: "2. Bundesliga",
     2: "Champions League",
     3: "Europa League",
-    207: "Super League", // Schweiz
+    207: "Super League",
     39: "Premier League",
     135: "Serie A",
     140: "La Liga",
     61: "Ligue 1"
   };
   
-  return id && leagueMap[id] ? leagueMap[id] : "Andere Liga";
+  // DEBUG: Logge was wir bekommen
+  if (typeof window !== 'undefined') {
+    console.log('🔍 getLeagueName - ID:', id, 'Typ:', typeof id, 'Numeric:', numericId, 'Ergebnis:', numericId && leagueMap[numericId]);
+  }
+  
+  return numericId && leagueMap[numericId] ? leagueMap[numericId] : "Andere Liga";
 }
 
 export function getConfidenceColor(score: number): string {

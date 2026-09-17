@@ -6,34 +6,30 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://football-ai-
 
 async function getMatches(): Promise<Match[]> {
   try {
-    console.log('🔄 Hole Spiele von:', `${BACKEND_URL}/matches`);
-    
     const res = await fetch(`${BACKEND_URL}/matches`, {
-      cache: 'no-store', // Immer frische Daten beim Build
+      cache: 'no-store',
     });
     
     if (!res.ok) {
-      console.error('❌ Backend Fehler:', res.status, res.statusText);
+      console.error('❌ Backend Fehler:', res.status);
       return []; 
     }
     
     const data = await res.json();
-    console.log('📦 Backend Antwort:', JSON.stringify(data).substring(0, 200));
     
-    // Fall 1: Backend gibt direkt ein Array zurück
+    // DEBUG: Zeig mir genau, was das Backend liefert!
+    console.log('🔍 DEBUG - Rohdaten vom Backend:', JSON.stringify(data, null, 2));
+    
     if (Array.isArray(data)) {
+      // DEBUG: Zeig mir das erste Spiel im Detail
+      if (data.length > 0) {
+        console.log('🔍 DEBUG - Erstes Spiel:', data[0]);
+        console.log('🔍 DEBUG - league_id Typ:', typeof data[0].league_id, 'Wert:', data[0].league_id);
+      }
       return data;
     }
     
-    // Fall 2: Backend gibt ein Objekt mit "data" oder "matches" Feld zurück
-    if (data && typeof data === 'object') {
-      if (Array.isArray(data.data)) return data.data;
-      if (Array.isArray(data.matches)) return data.matches;
-    }
-    
-    console.warn('️ Unerwartetes Datenformat:', typeof data);
     return [];
-    
   } catch (error) {
     console.error('💥 Fetch Fehler:', error);
     return []; 
@@ -42,8 +38,6 @@ async function getMatches(): Promise<Match[]> {
 
 export default async function HomePage() {
   const matches = await getMatches();
-  
-  console.log('✅ Matches geladen:', matches.length, 'Spiele');
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-200">
@@ -67,16 +61,7 @@ export default async function HomePage() {
           <MatchList matches={matches} />
         ) : (
           <div className="max-w-4xl mx-auto p-8 text-center">
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-8">
-              <h2 className="text-xl font-bold text-white mb-4">Noch keine Spiele verfügbar</h2>
-              <p className="text-slate-400 mb-6">
-                Das Backend läuft, aber es wurden noch keine Spiele geladen.
-              </p>
-              <div className="text-sm text-slate-500 space-y-2">
-                <p>📡 Backend URL: {BACKEND_URL}</p>
-                <p>🔍 Prüfe: {BACKEND_URL}/matches</p>
-              </div>
-            </div>
+            <p className="text-slate-400">Keine Spiele gefunden.</p>
           </div>
         )}
       </div>
