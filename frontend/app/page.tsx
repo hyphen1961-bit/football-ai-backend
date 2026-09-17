@@ -1,151 +1,85 @@
-// frontend/components/MatchList.tsx
-'use client';
+// frontend/app/page.tsx
+import MatchList from '@/components/MatchList';
+import { Match } from '@/types';
 
-import { useState, useMemo } from 'react';
-import { Match, getConfidenceColor, getConfidenceLabel } from '@/types';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://football-ai-backend-production-0f95.up.railway.app';
 
-interface MatchListProps {
-  matches: Match[];
+async function getMatches(): Promise<Match[]> {
+  try {
+    console.log('🔄 Hole Spiele von:', `${BACKEND_URL}/matches`);
+    
+    const res = await fetch(`${BACKEND_URL}/matches`, {
+      cache: 'no-store', // Immer frische Daten beim Build
+    });
+    
+    if (!res.ok) {
+      console.error('❌ Backend Fehler:', res.status, res.statusText);
+      return []; 
+    }
+    
+    const data = await res.json();
+    console.log('📦 Backend Antwort:', JSON.stringify(data).substring(0, 200));
+    
+    // Fall 1: Backend gibt direkt ein Array zurück
+    if (Array.isArray(data)) {
+      return data;
+    }
+    
+    // Fall 2: Backend gibt ein Objekt mit "data" oder "matches" Feld zurück
+    if (data && typeof data === 'object') {
+      if (Array.isArray(data.data)) return data.data;
+      if (Array.isArray(data.matches)) return data.matches;
+    }
+    
+    console.warn('️ Unerwartetes Datenformat:', typeof data);
+    return [];
+    
+  } catch (error) {
+    console.error('💥 Fetch Fehler:', error);
+    return []; 
+  }
 }
 
-// HIER IST DAS WICHTIGE "export default"
-export default function MatchList({ matches }: MatchListProps) {
-  const [selectedLeague, setSelectedLeague] = useState<string>('Alle');
-
-  const leagues = useMemo(() => {
-    const uniqueLeagues = Array.from(new Set(matches.map((m) => m.league_name || 'Unbekannte Liga')));
-    return ['Alle', ...uniqueLeagues.sort()];
-  }, [matches]);
-
-  const hotMatches = useMemo(() => {
-    return matches
-      .filter((m) => (m.analysis?.confidence_score || 0) >= 80)
-      .sort((a, b) => (b.analysis?.confidence_score || 0) - (a.analysis?.confidence_score || 0))
-      .slice(0, 6);
-  }, [matches]);
-
-  const filteredMatches = useMemo(() => {
-    if (selectedLeague === 'Alle') return matches;
-    return matches.filter((m) => m.league_name === selectedLeague);
-  }, [matches, selectedLeague]);
-
-  const groupedMatches = useMemo(() => {
-    const groups: Record<string, Match[]> = {};
-    filteredMatches.forEach((match) => {
-      const date = new Date(match.kickoff_time).toLocaleDateString('de-DE', {
-        weekday: 'long',
-        day: '2-digit',
-        month: '2-digit',
-      });
-      if (!groups[date]) groups[date] = [];
-      groups[date].push(match);
-    });
-    return groups;
-  }, [filteredMatches]);
+export default async function HomePage() {
+  const matches = await getMatches();
+  
+  console.log('✅ Matches geladen:', matches.length, 'Spiele');
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-8">
-      {hotMatches.length > 0 && (
-        <section className="bg-gradient-to-br from-indigo-900/50 to-slate-900 border border-indigo-500/30 rounded-xl p-6">
-          <h2 className="text-xl font-bold text-indigo-300 mb-4 flex items-center gap-2">
-            🔥 Most Hot of the Day
-            <span className="text-xs font-normal text-indigo-400 bg-indigo-900/50 px-2 py-1 rounded-full">
-              Top {hotMatches.length} KI-Favoriten
-            </span>
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {hotMatches.map((match) => (
-              <MatchCard key={match.id} match={match} isHot />
-            ))}
+    <main className="min-h-screen bg-slate-950 text-slate-200">
+      <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+              FOOTBALL AI KUMPEL-TIPP
+            </h1>
+            <p className="text-xs text-slate-400">KI-gestützte Wett-Community</p>
           </div>
-        </section>
-      )}
-
-      <section>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <h2 className="text-2xl font-bold text-white">Alle Spiele</h2>
-          <select
-            value={selectedLeague}
-            onChange={(e) => setSelectedLeague(e.target.value)}
-            className="bg-slate-800 text-white border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          >
-            {leagues.map((league) => (
-              <option key={league} value={league}>
-                {league}
-              </option>
-            ))}
-          </select>
+          <div className="text-right">
+            <p className="text-sm font-bold text-white">Willkommen, Urs</p>
+            <p className="text-xs text-green-400">● {matches.length} Spiele geladen</p>
+          </div>
         </div>
+      </header>
 
-        <div className="space-y-6">
-          {Object.entries(groupedMatches).map(([date, dayMatches]) => (
-            <div key={date}>
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 border-b border-slate-800 pb-2">
-                {date}
-              </h3>
-              <div className="space-y-3">
-                {dayMatches.map((match) => (
-                  <MatchCard key={match.id} match={match} />
-                ))}
+      <div className="py-8">
+        {matches.length > 0 ? (
+          <MatchList matches={matches} />
+        ) : (
+          <div className="max-w-4xl mx-auto p-8 text-center">
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-8">
+              <h2 className="text-xl font-bold text-white mb-4">Noch keine Spiele verfügbar</h2>
+              <p className="text-slate-400 mb-6">
+                Das Backend läuft, aber es wurden noch keine Spiele geladen.
+              </p>
+              <div className="text-sm text-slate-500 space-y-2">
+                <p>📡 Backend URL: {BACKEND_URL}</p>
+                <p>🔍 Prüfe: {BACKEND_URL}/matches</p>
               </div>
             </div>
-          ))}
-          
-          {filteredMatches.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
-              Keine Spiele für diese Auswahl gefunden.
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function MatchCard({ match, isHot = false }: { match: Match; isHot?: boolean }) {
-  const confidence = match.analysis?.confidence_score || 0;
-  const colorClass = getConfidenceColor(confidence);
-  const time = new Date(match.kickoff_time).toLocaleTimeString('de-DE', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  return (
-    <div 
-      className={`relative bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-indigo-500/50 rounded-lg p-4 transition-all cursor-pointer group ${
-        isHot ? 'ring-1 ring-indigo-500/30' : ''
-      }`}
-      onClick={() => console.log('Öffne Modal für:', match.api_fixture_id)}
-    >
-      {match.is_tipped_by_user && (
-        <div className="absolute top-2 right-2 text-green-400" title="Bereits getippt">✅</div>
-      )}
-
-      <div className="flex justify-between items-start mb-3">
-        <span className="text-xs font-medium text-slate-400 bg-slate-900 px-2 py-1 rounded">
-          {match.league_name || 'Liga'}
-        </span>
-        <span className="text-xs font-mono text-slate-500">{time} Uhr</span>
+          </div>
+        )}
       </div>
-
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex-1 text-right pr-4">
-          <p className="font-bold text-lg text-white">{match.home_team_name}</p>
-        </div>
-        <div className="text-slate-500 font-mono text-sm">vs</div>
-        <div className="flex-1 pl-4">
-          <p className="font-bold text-lg text-white">{match.away_team_name}</p>
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center">
-        <div className={`px-3 py-1 rounded-full text-xs font-bold border ${colorClass}`}>
-          {confidence}% – {getConfidenceLabel(confidence)}
-        </div>
-        <div className="text-xs text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
-          Details ansehen →
-        </div>
-      </div>
-    </div>
+    </main>
   );
 }
