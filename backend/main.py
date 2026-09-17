@@ -241,7 +241,7 @@ def submit_tip(tip: TipInput):
     
     return {"message": f"Tipp von {tip.username} gespeichert!", "tip": tip_data}
 
-# ============ RANKING & SCORES ============
+# ============ RANKING & SCORES ============ 
 
 @app.post("/match-results")
 def save_match_result(result: MatchResultInput):

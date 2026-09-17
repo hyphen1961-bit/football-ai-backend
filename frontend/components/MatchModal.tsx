@@ -83,15 +83,9 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     
     try {
       const tipData = {
-        user_id: '1',
+        username: 'Urs',  // ← RICHTIG! (oder dynamisch vom User)
         api_fixture_id: match.api_fixture_id,
         predicted_winner: tip1X2,
-        tip_over_under: tipOverUnder || null,
-        tip_btts: tipBTTS || null,
-        tip_double_chance: tipDoubleChance || null,
-        tip_exact_score_home: tipExactScoreHome ? parseInt(tipExactScoreHome) : null,
-        tip_exact_score_away: tipExactScoreAway ? parseInt(tipExactScoreAway) : null,
-        deviation_reason: deviationReason || null,
       };
 
       const backendUrl = 'https://football-ai-backend-production-0f95.up.railway.app';
