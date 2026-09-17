@@ -83,9 +83,8 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     
     try {
       const tipData = {
-        username: 'Urs',  // ← RICHTIG! (oder dynamisch vom User)
+        username: 'Urs', // ✅ RICHTIG (Backend erstellt automatisch die ID)
         api_fixture_id: match.api_fixture_id,
-        predicted_winner: tip1X2,
       };
 
       const backendUrl = 'https://football-ai-backend-production-0f95.up.railway.app';
