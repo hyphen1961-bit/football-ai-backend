@@ -1,55 +1,110 @@
-// frontend/types.ts
+'use client';
 
-export interface MatchAnalysis {
-  form_home: string[] | string;
-  form_away: string[] | string;
-  injuries_home: string[] | string;
-  injuries_away: string[] | string;
-  h2h_stats: any; // Flexibel halten, da Backend mal Objekt, mal String liefern kann
-  odds: Record<string, number>;
-  ai_prediction: string;
-  confidence_score: number;
-  context_notes: string;
+import { Match, getConfidenceColor, getConfidenceLabel, getLeagueName } from '@/types';
+
+interface MatchModalProps {
+  match: Match | null;
+  onClose: () => void;
 }
 
-export interface Match {
-  id: string;
-  api_fixture_id: number;
-  league_id?: number | string;
-  league_name?: string;
-  home_team_name: string;
-  away_team_name: string;
-  kickoff_time: string;
-  status: string;
-  is_tipped_by_user?: boolean;
-  analysis?: MatchAnalysis;
-}
+export default function MatchModal({ match, onClose }: MatchModalProps) {
+  if (!match) return null;
 
-export function getLeagueName(id?: number | string, name?: string): string {
-  if (name && name !== 'Liga') return name;
-  const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
-  const leagueMap: Record<number, string> = {
-    78: "Bundesliga",
-    79: "2. Bundesliga",
-    2: "Champions League",
-    3: "Europa League",
-    207: "Super League",
-    39: "Premier League",
-    135: "Serie A",
-    140: "La Liga",
-    61: "Ligue 1"
+  const confidence = match.analysis?.confidence_score || 0;
+  const colorClass = getConfidenceColor(confidence);
+  const leagueName = getLeagueName(match.league_id, match.league_name);
+  const time = new Date(match.kickoff_time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const date = new Date(match.kickoff_time).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  const renderList = (data: any) => {
+    if (Array.isArray(data) && data.length > 0) return data.join(' ');
+    if (typeof data === 'string' && data.length > 0) return data;
+    return 'Keine Daten';
   };
-  return numericId && leagueMap[numericId] ? leagueMap[numericId] : "Andere Liga";
-}
 
-export function getConfidenceColor(score: number): string {
-  if (score >= 70) return "bg-green-500/20 text-green-400 border-green-500/50";
-  if (score >= 50) return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
-  return "bg-red-500/20 text-red-400 border-red-500/50";
-}
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        
+        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-medium text-slate-400 bg-slate-800 px-2 py-1 rounded">{leagueName}</span>
+              <span className="text-xs text-slate-500">{date} - {time} Uhr</span>
+            </div>
+            <h2 className="text-2xl font-bold text-white">{match.home_team_name} vs {match.away_team_name}</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none p-2">X</button>
+        </div>
 
-export function getConfidenceLabel(score: number): string {
-  if (score >= 70) return "KI sehr sicher";
-  if (score >= 50) return "KI unsicher";
-  return "Keine klare Tendenz";
+        <div className="p-6 space-y-6">
+          <div className="flex justify-center">
+            <div className={`px-6 py-3 rounded-full text-lg font-bold border ${colorClass}`}>
+              {confidence}% - {getConfidenceLabel(confidence)}
+            </div>
+          </div>
+
+          {match.analysis?.ai_prediction && (
+            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">KI-Vorhersage</h3>
+              <p className="text-xl font-bold text-white">{match.analysis.ai_prediction}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Form</h3>
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs text-slate-500">Heim</p>
+                  <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_home)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Auswaerts</p>
+                  <p className="text-white font-mono text-sm">{renderList(match.analysis?.form_away)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">Verletzte</h3>
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs text-slate-500">Heim</p>
+                  <p className="text-white text-sm">{renderList(match.analysis?.injuries_home)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Auswaerts</p>
+                  <p className="text-white text-sm">{renderList(match.analysis?.injuries_away)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-400 uppercase mb-2">H2H</h3>
+              {match.analysis?.h2h_stats && typeof match.analysis.h2h_stats === 'object' ? (
+                <div className="space-y-1">
+                  <p className="text-white text-sm">Heimsiege: <span className="font-bold">{(match.analysis.h2h_stats as any).home_wins || 0}</span></p>
+                  <p className="text-white text-sm">Auswaertssiege: <span className="font-bold">{(match.analysis.h2h_stats as any).away_wins || 0}</span></p>
+                </div>
+              ) : (
+                <p className="text-white text-sm">Keine Daten</p>
+              )}
+            </div>
+          </div>
+
+          {match.analysis?.context_notes && (
+            <div className="bg-indigo-900/30 rounded-lg p-4 border border-indigo-500/30">
+              <h3 className="text-sm font-semibold text-indigo-300 uppercase mb-2">KI-Kommentar</h3>
+              <p className="text-white text-sm">{match.analysis.context_notes}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 bg-slate-900 border-t border-slate-800 p-4 text-center">
+          <p className="text-xs text-slate-500">Wettmaerkte kommen im naechsten Schritt</p>
+        </div>
+      </div>
+    </div>
+  );
 }
