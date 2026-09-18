@@ -6,14 +6,14 @@ export interface MatchAnalysis {
   injuries_home: string[] | string;
   injuries_away: string[] | string;
   h2h_stats: any;
-  odds: Record<string, number>;
+  odds?: Record<string, number>;
   ai_prediction: string;
   confidence_score: number;
-  context_notes: string;
+  context_notes?: string;
 }
 
 export interface Match {
-  id: string;
+  id?: string;
   api_fixture_id: number;
   league_id?: number | string;
   league_name?: string;
@@ -23,6 +23,7 @@ export interface Match {
   status: string;
   home_score?: number;
   away_score?: number;
+  season?: number;
   is_tipped_by_user?: boolean;
   analysis?: MatchAnalysis;
 }
