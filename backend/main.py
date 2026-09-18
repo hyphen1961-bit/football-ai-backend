@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse  # <-- NEU: Import hinzugefügt
 from supabase import create_client
 import httpx
 import os
@@ -278,7 +279,9 @@ def get_user_stats(user_id: str):
         print(f"Fehler beim Laden der User-Stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    @app.get("/tips/{username}/{fixture_id}")
+# ============ NEUE ENDPOINTS (Korrekt eingerückt!) ============
+
+@app.get("/tips/{username}/{fixture_id}")
 async def get_user_tip(username: str, fixture_id: int):
     """
     Holt den Tipp eines Users für ein spezifisches Spiel
@@ -302,7 +305,7 @@ async def get_user_tip(username: str, fixture_id: int):
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
-    @app.get("/match-results/{fixture_id}")
+@app.get("/match-results/{fixture_id}")
 async def get_match_result(fixture_id: int):
     """
     Holt das Ergebnis eines Spiels aus der Datenbank
@@ -324,4 +327,3 @@ async def get_match_result(fixture_id: int):
     
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
-    
