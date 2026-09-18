@@ -7,6 +7,8 @@ interface MatchModalProps {
   onClose: () => void;
 }
 
+const BACKEND_URL = 'https://football-ai-backend-production-0f95.up.railway.app';
+
 export default function MatchModal({ match, onClose }: MatchModalProps) {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isLocked, setIsLocked] = useState<boolean>(false);
@@ -32,27 +34,25 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // Timer-Logik mit 3 Zuständen
+  // Prüfen ob Spiel bereits gespielt wurde
+  const isMatchPlayed = match.status === 'FT' || match.status === 'AET' || match.status === 'PEN';
+
+  // 1. Timer Logik
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
       const diff = kickoffTime.getTime() - now.getTime();
       const mins = Math.floor(diff / (1000 * 60));
 
-      // Zustand 1: Spiel ist beendet (Status FT oder Zeit vorbei)
-      if (match.status === 'FT' || mins < -120) {
+      if (isMatchPlayed || mins < -120) {
         setIsFinished(true);
         setIsLocked(true);
         setTimeLeft('Beendet');
-      } 
-      // Zustand 2: Spiel ist gesperrt (< 2 Min)
-      else if (mins <= 2) {
+      } else if (mins <= 2) {
         setIsLocked(true);
         setIsFinished(false);
         setTimeLeft('Gesperrt');
-      } 
-      // Zustand 3: Spiel ist in der Zukunft
-      else {
+      } else {
         setIsLocked(false);
         setIsFinished(false);
         const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -60,13 +60,38 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         setTimeLeft(`Noch ${hours}h ${minutes}min`);
       }
     };
-
     updateTimer();
     const interval = setInterval(updateTimer, 60000);
     return () => clearInterval(interval);
-  }, [kickoffTime, match.status]);
+  }, [kickoffTime, isMatchPlayed]);
 
-  // KI-Abweichung prüfen
+  // 2. NEU: Vorhandenen Tipp laden, wenn Modal für ein zukünftiges Spiel geöffnet wird
+  useEffect(() => {
+    // Felder erst mal resetten
+    setTip1X2(''); setTipOverUnder(''); setTipBTTS(''); setTipDoubleChance('');
+    setTipExactHome(''); setTipExactAway(''); setDeviationReason('');
+
+    if (!isFinished && match.api_fixture_id) {
+      fetch(`${BACKEND_URL}/tips/Urs/${match.api_fixture_id}`)
+        .then(res => {
+          if (res.ok) return res.json();
+          return null;
+        })
+        .then(data => {
+          if (data) {
+            setTip1X2(data.predicted_winner || '');
+            setTipOverUnder(data.tip_over_under || '');
+            setTipBTTS(data.tip_btts || '');
+            setTipDoubleChance(data.tip_double_chance || '');
+            setTipExactHome(data.tip_exact_score_home?.toString() || '');
+            setTipExactAway(data.tip_exact_score_away?.toString() || '');
+            setDeviationReason(data.deviation_reason || '');
+          }
+        })
+        .catch(err => console.error("Fehler beim Laden des Tipps:", err));
+    }
+  }, [match, isFinished]);
+
   const aiPrediction = (match.analysis?.ai_prediction || '').toLowerCase();
   const isDeviating = tip1X2 !== '' && (
     (aiPrediction.includes('home') && tip1X2 !== '1') ||
@@ -82,7 +107,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
 
   const handleSubmit = async () => {
     if (!tip1X2) {
-      alert('Bitte wähle einen 1X2-Tipp');
+      alert('Bitte wähle zuerst einen 1X2-Tipp (1, 0 oder 2)');
       return;
     }
 
@@ -97,23 +122,24 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         tip_double_chance: tipDoubleChance || null,
         tip_exact_score_home: tipExactHome ? parseInt(tipExactHome) : null,
         tip_exact_score_away: tipExactAway ? parseInt(tipExactAway) : null,
+        deviation_reason: deviationReason || null,
       };
 
-      const res = await fetch('https://football-ai-backend-production-0f95.up.railway.app/tips', {
+      const res = await fetch(`${BACKEND_URL}/tips`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tipData),
       });
 
       if (res.ok) {
-        alert('Tipp gespeichert!');
+        alert('Tipp aktualisiert/gespeichert!');
         onClose();
       } else {
         const err = await res.text();
-        alert('Fehler: ' + err);
+        alert('Fehler beim Speichern: ' + err);
       }
     } catch (error) {
-      alert('Fehler beim Speichern');
+      alert('Netzwerkfehler');
     } finally {
       setIsSubmitting(false);
     }
@@ -124,7 +150,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
       <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Header */}
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-start">
+        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-start z-10">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-medium text-slate-400 bg-slate-800 px-2 py-1 rounded">{leagueName}</span>
@@ -185,24 +211,24 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
           </div>
 
           {/* ============================================ */}
-          {/* FALL 1: SPIEL BEENDET → READ-ONLY ANSICHT   */}
+          {/* FALL 1: SPIEL BEENDET → READ-ONLY           */}
           {/* ============================================ */}
           {isFinished && (
             <div className="border-t border-slate-800 pt-6">
-              <h3 className="text-lg font-bold text-white mb-4">Ergebnis</h3>
+              <h3 className="text-lg font-bold text-white mb-4">Endergebnis</h3>
               <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 text-center">
-                <div className="flex justify-center items-center gap-6 mb-4">
+                <div className="flex justify-center items-center gap-6">
                   <div className="text-center">
                     <p className="text-slate-400 text-sm mb-1">{match.home_team_name}</p>
-                    <p className="text-4xl font-bold text-white">{match.home_score ?? '-'}</p>
+                    <p className="text-4xl font-black text-white">{match.home_score ?? '-'}</p>
                   </div>
-                  <span className="text-2xl text-slate-500">:</span>
+                  <span className="text-slate-500 text-3xl font-bold">:</span>
                   <div className="text-center">
                     <p className="text-slate-400 text-sm mb-1">{match.away_team_name}</p>
-                    <p className="text-4xl font-bold text-white">{match.away_score ?? '-'}</p>
+                    <p className="text-4xl font-black text-white">{match.away_score ?? '-'}</p>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500">Endstand</p>
+                <p className="text-xs text-slate-500 mt-4">Dieses Spiel ist bereits beendet.</p>
               </div>
             </div>
           )}
@@ -220,11 +246,11 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
           )}
 
           {/* ============================================ */}
-          {/* FALL 3: SPIEL AKTIV → TIPP-FORMULAR         */}
+          {/* FALL 3: SPIEL AKTIV → TIPP-FORMULAR (EDITIERBAR) */}
           {/* ============================================ */}
           {!isFinished && !isLocked && (
             <div className="border-t border-slate-800 pt-6">
-              <h3 className="text-lg font-bold text-white mb-4">Dein Tipp</h3>
+              <h3 className="text-lg font-bold text-white mb-4">Dein Tipp (Bearbeitbar bis 2 Min vor Anpfiff)</h3>
               <div className="space-y-6">
                 
                 {/* 1X2 */}
@@ -232,16 +258,13 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                   <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">1X2 - Wer gewinnt?</label>
                   <div className="grid grid-cols-3 gap-3">
                     <button type="button" onClick={() => setTip1X2('1')} className={`py-4 rounded-lg border font-bold text-lg transition-all ${tip1X2 === '1' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/50' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
-                      1
-                      <span className="block text-xs font-normal mt-1">{match.home_team_name}</span>
+                      1 <span className="block text-xs font-normal mt-1">{match.home_team_name}</span>
                     </button>
                     <button type="button" onClick={() => setTip1X2('0')} className={`py-4 rounded-lg border font-bold text-lg transition-all ${tip1X2 === '0' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/50' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
-                      0
-                      <span className="block text-xs font-normal mt-1">Unentschieden</span>
+                      0 <span className="block text-xs font-normal mt-1">Unentschieden</span>
                     </button>
                     <button type="button" onClick={() => setTip1X2('2')} className={`py-4 rounded-lg border font-bold text-lg transition-all ${tip1X2 === '2' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/50' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
-                      2
-                      <span className="block text-xs font-normal mt-1">{match.away_team_name}</span>
+                      2 <span className="block text-xs font-normal mt-1">{match.away_team_name}</span>
                     </button>
                   </div>
                 </div>
@@ -305,12 +328,8 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
 
                 {/* Speichern-Button */}
                 <button type="button" onClick={handleSubmit} disabled={isSubmitting || !tip1X2} className={`w-full font-bold py-4 rounded-lg text-lg transition-all ${isSubmitting || !tip1X2 ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/50'}`}>
-                  {isSubmitting ? 'Speichern...' : 'Tipp speichern'}
+                  {isSubmitting ? 'Speichern...' : 'Tipp speichern / aktualisieren'}
                 </button>
-                
-                {!tip1X2 && (
-                  <p className="text-center text-sm text-slate-400">💡 Wähle zuerst einen 1X2-Tipp (1, 0 oder 2)</p>
-                )}
               </div>
             </div>
           )}
