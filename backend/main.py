@@ -282,4 +282,26 @@ def get_user_stats(user_id: str):
 # ============ NEUE GET-ENDPOINTS (Damit das Modal Daten laden kann) ============
 
 @app.get("/tips/{username}/{fixture_id}")
+async def get_user_tip(username: str, fixture_id: int):
+    try:
+        # 1. Hole die user_id anhand des Namens
+        user = supabase.table('users').select('id').eq('username', username).execute()
+        if not user.data:
+            return JSONResponse(status_code=404, content={"detail": "User nicht gefunden"})
+        
+        user_id = user.data[0]['id']
+        
+        # 2. Hole den Tipp mit der user_id (nicht username!)
+        tip = supabase.table("user_tips")\
+            .select("*")\
+            .eq("user_id", user_id)\
+            .eq("api_fixture_id", fixture_id)\
+            .execute()
+        
+        if not tip.data or len(tip.data) == 0:
+            return JSONResponse(status_code=404, content={"detail": "Kein Tipp gefunden"})
+        
+        return tip.data[0]
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 async
