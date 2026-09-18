@@ -5,7 +5,7 @@ export interface MatchAnalysis {
   form_away: string[] | string;
   injuries_home: string[] | string;
   injuries_away: string[] | string;
-  h2h_stats: any; // Flexibel halten, da Backend mal Objekt, mal String liefern kann
+  h2h_stats: any;
   odds: Record<string, number>;
   ai_prediction: string;
   confidence_score: number;
@@ -21,13 +21,17 @@ export interface Match {
   away_team_name: string;
   kickoff_time: string;
   status: string;
+  home_score?: number;
+  away_score?: number;
   is_tipped_by_user?: boolean;
   analysis?: MatchAnalysis;
 }
 
 export function getLeagueName(id?: number | string, name?: string): string {
   if (name && name !== 'Liga') return name;
+  
   const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
+  
   const leagueMap: Record<number, string> = {
     78: "Bundesliga",
     79: "2. Bundesliga",
@@ -39,6 +43,7 @@ export function getLeagueName(id?: number | string, name?: string): string {
     140: "La Liga",
     61: "Ligue 1"
   };
+  
   return numericId && leagueMap[numericId] ? leagueMap[numericId] : "Andere Liga";
 }
 
