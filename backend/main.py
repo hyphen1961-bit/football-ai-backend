@@ -242,7 +242,7 @@ def submit_tip(tip: TipInput):
     
     return {"message": f"Tipp von {tip.username} gespeichert!", "tip": tip_data}
 
-# ============ RANKING & SCORES ============
+# ============ RANKING & SCORES ============ 
 
 @app.post("/match-results")
 def save_match_result(result: MatchResultInput):
@@ -279,24 +279,7 @@ def get_user_stats(user_id: str):
         print(f"Fehler beim Laden der User-Stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ============ NEUE GET-ENDPOINTS (Korrekt eingerückt!) ============
+# ============ NEUE GET-ENDPOINTS (Damit das Modal Daten laden kann) ============
 
 @app.get("/tips/{username}/{fixture_id}")
-async def get_user_tip(username: str, fixture_id: int):
-    try:
-        tip = supabase.table("user_tips").select("*").eq("username", username).eq("api_fixture_id", fixture_id).execute()
-        if not tip.data or len(tip.data) == 0:
-            return JSONResponse(status_code=404, content={"detail": "Kein Tipp gefunden"})
-        return tip.data[0]
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
-
-@app.get("/match-results/{fixture_id}")
-async def get_match_result(fixture_id: int):
-    try:
-        result = supabase.table("match_results").select("*").eq("api_fixture_id", fixture_id).execute()
-        if not result.data or len(result.data) == 0:
-            return JSONResponse(status_code=404, content={"detail": "Kein Ergebnis gefunden"})
-        return result.data[0]
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
+async
