@@ -7,8 +7,6 @@ interface MatchModalProps {
   onClose: () => void;
 }
 
-const BACKEND_URL = 'https://football-ai-backend-production-0f95.up.railway.app';
-
 export default function MatchModal({ match, onClose }: MatchModalProps) {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isLocked, setIsLocked] = useState<boolean>(false);
@@ -37,22 +35,27 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   // Prüfen ob Spiel bereits gespielt wurde
   const isMatchPlayed = match.status === 'FT' || match.status === 'AET' || match.status === 'PEN';
 
-  // 1. Timer Logik
+  // Timer-Logik
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
       const diff = kickoffTime.getTime() - now.getTime();
       const mins = Math.floor(diff / (1000 * 60));
 
+      // Zustand 1: Spiel ist beendet
       if (isMatchPlayed || mins < -120) {
         setIsFinished(true);
         setIsLocked(true);
         setTimeLeft('Beendet');
-      } else if (mins <= 2) {
+      } 
+      // Zustand 2: Spiel ist gesperrt (< 2 Min)
+      else if (mins <= 2) {
         setIsLocked(true);
         setIsFinished(false);
         setTimeLeft('Gesperrt');
-      } else {
+      } 
+      // Zustand 3: Spiel ist in der Zukunft
+      else {
         setIsLocked(false);
         setIsFinished(false);
         const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -60,38 +63,13 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         setTimeLeft(`Noch ${hours}h ${minutes}min`);
       }
     };
+
     updateTimer();
     const interval = setInterval(updateTimer, 60000);
     return () => clearInterval(interval);
   }, [kickoffTime, isMatchPlayed]);
 
-  // 2. NEU: Vorhandenen Tipp laden, wenn Modal für ein zukünftiges Spiel geöffnet wird
-  useEffect(() => {
-    // Felder erst mal resetten
-    setTip1X2(''); setTipOverUnder(''); setTipBTTS(''); setTipDoubleChance('');
-    setTipExactHome(''); setTipExactAway(''); setDeviationReason('');
-
-    if (!isFinished && match.api_fixture_id) {
-      fetch(`${BACKEND_URL}/tips/Urs/${match.api_fixture_id}`)
-        .then(res => {
-          if (res.ok) return res.json();
-          return null;
-        })
-        .then(data => {
-          if (data) {
-            setTip1X2(data.predicted_winner || '');
-            setTipOverUnder(data.tip_over_under || '');
-            setTipBTTS(data.tip_btts || '');
-            setTipDoubleChance(data.tip_double_chance || '');
-            setTipExactHome(data.tip_exact_score_home?.toString() || '');
-            setTipExactAway(data.tip_exact_score_away?.toString() || '');
-            setDeviationReason(data.deviation_reason || '');
-          }
-        })
-        .catch(err => console.error("Fehler beim Laden des Tipps:", err));
-    }
-  }, [match, isFinished]);
-
+  // KI-Abweichung prüfen
   const aiPrediction = (match.analysis?.ai_prediction || '').toLowerCase();
   const isDeviating = tip1X2 !== '' && (
     (aiPrediction.includes('home') && tip1X2 !== '1') ||
@@ -105,7 +83,8 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     return 'Keine Daten';
   };
 
-   = async () => {
+  // FIX: Hier fehlte "const handleSubmit"
+  const handleSubmit = async () => {
     if (!tip1X2) {
       alert('Bitte wähle zuerst einen 1X2-Tipp (1, 0 oder 2)');
       return;
@@ -122,24 +101,23 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         tip_double_chance: tipDoubleChance || null,
         tip_exact_score_home: tipExactHome ? parseInt(tipExactHome) : null,
         tip_exact_score_away: tipExactAway ? parseInt(tipExactAway) : null,
-        deviation_reason: deviationReason || null,
       };
 
-      const res = await fetch(`${BACKEND_URL}/tips`, {
+      const res = await fetch('https://football-ai-backend-production-0f95.up.railway.app/tips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tipData),
       });
 
       if (res.ok) {
-        alert('Tipp aktualisiert/gespeichert!');
+        alert('Tipp gespeichert!');
         onClose();
       } else {
         const err = await res.text();
-        alert('Fehler beim Speichern: ' + err);
+        alert('Fehler: ' + err);
       }
     } catch (error) {
-      alert('Netzwerkfehler');
+      alert('Fehler beim Speichern');
     } finally {
       setIsSubmitting(false);
     }
@@ -150,7 +128,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
       <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Header */}
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-start z-10">
+        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-start">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-medium text-slate-400 bg-slate-800 px-2 py-1 rounded">{leagueName}</span>
@@ -210,9 +188,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             </div>
           </div>
 
-          {/* ============================================ */}
-          {/* FALL 1: SPIEL BEENDET → READ-ONLY           */}
-          {/* ============================================ */}
+          {/* FALL 1: SPIEL BEENDET → READ-ONLY */}
           {isFinished && (
             <div className="border-t border-slate-800 pt-6">
               <h3 className="text-lg font-bold text-white mb-4">Endergebnis</h3>
@@ -233,9 +209,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             </div>
           )}
 
-          {/* ============================================ */}
-          {/* FALL 2: SPIEL GESPERRT (< 2 MIN)            */}
-          {/* ============================================ */}
+          {/* FALL 2: SPIEL GESPERRT (< 2 MIN) */}
           {!isFinished && isLocked && (
             <div className="border-t border-slate-800 pt-6">
               <div className="text-center py-8 bg-red-900/20 border border-red-500/50 rounded-lg">
@@ -245,12 +219,10 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             </div>
           )}
 
-          {/* ============================================ */}
-          {/* FALL 3: SPIEL AKTIV → TIPP-FORMULAR (EDITIERBAR) */}
-          {/* ============================================ */}
+          {/* FALL 3: SPIEL AKTIV → TIPP-FORMULAR */}
           {!isFinished && !isLocked && (
             <div className="border-t border-slate-800 pt-6">
-              <h3 className="text-lg font-bold text-white mb-4">Dein Tipp (Bearbeitbar bis 2 Min vor Anpfiff)</h3>
+              <h3 className="text-lg font-bold text-white mb-4">Dein Tipp</h3>
               <div className="space-y-6">
                 
                 {/* 1X2 */}
@@ -321,20 +293,4 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                 {isDeviating && (
                   <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4">
                     <label className="text-sm font-semibold text-yellow-300 uppercase block mb-2">🤔 Warum gegen die KI?</label>
-                    <textarea value={deviationReason} onChange={(e) => setDeviationReason(e.target.value.slice(0, 100))} placeholder="Max 100 Zeichen" className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-yellow-500" rows={3} />
-                    <p className="text-xs text-yellow-400 mt-2">{deviationReason.length}/100</p>
-                  </div>
-                )}
-
-                {/* Speichern-Button */}
-                <button type="button" onClick={handleSubmit} disabled={isSubmitting || !tip1X2} className={`w-full font-bold py-4 rounded-lg text-lg transition-all ${isSubmitting || !tip1X2 ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/50'}`}>
-                  {isSubmitting ? 'Speichern...' : 'Tipp speichern / aktualisieren'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+                    <textarea value={deviationReason} onChange={(e) => setDeviationReason(e.target.value.slice(0, 100))} placeholder="Max 100 Zeichen" className="w-full bg-slate-8
