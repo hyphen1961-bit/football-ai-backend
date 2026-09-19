@@ -223,7 +223,6 @@ def save_match_result(result: MatchResultInput):
 @app.get("/ranking")
 def get_ranking():
     try:
-        # Platzhalter, damit die App nicht crasht. Kann später mit echter Logik gefüllt werden.
         return {"message": "Ranking wird geladen", "data": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
