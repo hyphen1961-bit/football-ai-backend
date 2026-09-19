@@ -105,7 +105,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     return 'Keine Daten';
   };
 
-  const handleSubmit = async () => {
+   = async () => {
     if (!tip1X2) {
       alert('Bitte wähle zuerst einen 1X2-Tipp (1, 0 oder 2)');
       return;
