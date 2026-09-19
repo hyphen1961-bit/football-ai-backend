@@ -31,6 +31,8 @@ api_headers = {
     "x-rapidapi-host": "v3.football.api-sports.io"
 }
 
+# ============ MODELS ============
+
 class TipInput(BaseModel):
     username: str
     api_fixture_id: int
@@ -47,9 +49,13 @@ class MatchResultInput(BaseModel):
     away_score: int
     status: str = "FT"
 
+# ============ HEALTH CHECK ============
+
 @app.get("/")
 def read_root():
     return {"message": "Football AI API is running!", "status": "healthy"}
+
+# ============ FIXTURES ============
 
 @app.get("/fixtures/next")
 def get_next_fixtures():
@@ -83,6 +89,8 @@ def get_next_fixtures():
         results["bundesliga_2025"] = {"error": str(e)}
     
     return results
+
+# ============ ANALYSIS ============
 
 @app.post("/analyze/{fixture_id}")
 def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
@@ -170,6 +178,8 @@ def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
         "message": f"Analyse gespeichert! KI tippt: {prediction} ({score}% Confidence)"
     }
 
+# ============ MATCHES ============
+
 @app.get("/matches")
 async def get_matches():
     try:
@@ -202,6 +212,8 @@ def get_analysis(fixture_id: int):
         raise HTTPException(status_code=404, detail="Keine Analyse gefunden")
     return result.data[0]
 
+# ============ TIPS ============
+
 @app.post("/tips")
 def submit_tip(tip: TipInput):
     print(f"Neuer Tipp von {tip.username} für Spiel {tip.api_fixture_id}: {tip.predicted_winner}")
@@ -230,6 +242,8 @@ def submit_tip(tip: TipInput):
     
     return {"message": f"Tipp von {tip.username} gespeichert!", "tip": tip_data}
 
+# ============ RANKING & SCORES ============
+
 @app.post("/match-results")
 def save_match_result(result: MatchResultInput):
     try:
@@ -247,40 +261,3 @@ def save_match_result(result: MatchResultInput):
 
 @app.get("/ranking")
 def get_ranking():
-    try:
-        ranking = supabase.table('user_scores').select('*').order('total_points', desc=True).execute()
-        return ranking.data if ranking.data else []
-    except Exception as e:
-        print(f"Fehler beim Laden des Rankings: {e}")
-        return []
-
-@app.get("/user/{user_id}/stats")
-def get_user_stats(user_id: str):
-    try:
-        stats = supabase.table('user_scores').select('*').eq('user_id', user_id).execute()
-        if not stats.data:
-            raise HTTPException(status_code=404, detail="User nicht gefunden")
-        return stats.data[0]
-    except Exception as e:
-        print(f"Fehler beim Laden der User-Stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/tips/{username}/{fixture_id}")
-async def get_user_tip(username: str, fixture_id: int):
-    try:
-        tip = supabase.table("user_tips").select("*").eq("username", username).eq("api_fixture_id", fixture_id).execute()
-        if not tip.data or len(tip.data) == 0:
-            return JSONResponse(status_code=404, content={"detail": "Kein Tipp gefunden"})
-        return tip.data[0]
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
-
-@app.get("/match-results/{fixture_id}")
-async def get_match_result(fixture_id: int):
-    try:
-        result = supabase.table("match_results").select("*").eq("api_fixture_id", fixture_id).execute()
-        if not result.data or len(result.data) == 0:
-            return JSONResponse(status_code=404, content={"detail": "Kein Ergebnis gefunden"})
-        return result.data[0]
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
