@@ -1,6 +1,9 @@
 // frontend/app/ranking/page.tsx
 import Link from 'next/link';
 
+// Next.js anweisen, diese Seite immer dynamisch zu rendern (löst den Build-Fehler)
+export const dynamic = 'force-dynamic';
+
 const BACKEND_URL = 'https://football-ai-backend-production-0f95.up.railway.app';
 
 interface UserScore {
@@ -17,7 +20,7 @@ interface UserScore {
 async function getRanking(): Promise<UserScore[]> {
   try {
     const res = await fetch(`${BACKEND_URL}/ranking`, {
-      cache: 'no-store', // Immer frische Daten
+      cache: 'no-store',
     });
     if (!res.ok) return [];
     return await res.json();
@@ -33,7 +36,6 @@ export default async function RankingPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-200 p-4">
       <div className="max-w-4xl mx-auto">
-        
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -82,7 +84,7 @@ export default async function RankingPage() {
                     <td className="px-6 py-4 text-center text-slate-300 hidden md:table-cell">{user.correct_with_deviation}</td>
                     <td className="px-6 py-4 text-center">
                       <span className={`font-mono ${user.current_streak > 0 ? 'text-green-400' : 'text-slate-500'}`}>
-                         {user.current_streak}
+                        {user.current_streak}
                       </span>
                       <span className="text-xs text-slate-500 ml-1">(Best: {user.best_streak})</span>
                     </td>
@@ -129,7 +131,6 @@ export default async function RankingPage() {
             </div>
           </div>
         </div>
-
       </div>
     </main>
   );
