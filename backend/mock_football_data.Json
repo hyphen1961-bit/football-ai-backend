@@ -1,0 +1,115 @@
+{
+  "response": [
+    {
+      "fixture": {
+        "id": 99999,
+        "referee": "M. Schmidt",
+        "timezone": "UTC",
+        "date": "2026-09-23T18:30:00+00:00",
+        "timestamp": 1790188200,
+        "status": {
+          "long": "Match Finished",
+          "short": "FT",
+          "elapsed": 90
+        }
+      },
+      "league": {
+        "id": 78,
+        "name": "Bundesliga",
+        "country": "Germany",
+        "season": 2026,
+        "round": "Regular Season - 6"
+      },
+      "teams": {
+        "home": {
+          "id": 157,
+          "name": "Bayern Munich",
+          "logo": "https://media.api-sports.io/football/teams/157.png",
+          "winner": true
+        },
+        "away": {
+          "id": 165,
+          "name": "Borussia Dortmund",
+          "logo": "https://media.api-sports.io/football/teams/165.png",
+          "winner": false
+        }
+      },
+      "goals": {
+        "home": 3,
+        "away": 1
+      },
+      "score": {
+        "halftime": { "home": 1, "away": 0 },
+        "fulltime": { "home": 3, "away": 1 },
+        "extratime": { "home": null, "away": null },
+        "penalty": { "home": null, "away": null }
+      },
+      "events": [
+        {
+          "time": { "minute": 23, "extra": null },
+          "team": { "id": 157, "name": "Bayern Munich" },
+          "player": { "id": 276, "name": "H. Kane" },
+          "assist": { "id": 280, "name": "L. Sané" },
+          "type": "Goal",
+          "detail": "Normal Goal"
+        },
+        {
+          "time": { "minute": 58, "extra": null },
+          "team": { "id": 165, "name": "Borussia Dortmund" },
+          "player": { "id": 190, "name": "J. Brandt" },
+          "assist": { "id": 195, "name": "M. Sabitzer" },
+          "type": "Goal",
+          "detail": "Normal Goal"
+        }
+      ],
+      "lineups": [
+        {
+          "team": { "id": 157, "name": "Bayern Munich" },
+          "coach": { "id": 54, "name": "V. Kompany" },
+          "formation": "4-2-3-1",
+          "startXI": [
+            { "player": { "id": 1, "name": "M. Neuer", "number": 1, "pos": "G" } },
+            { "player": { "id": 276, "name": "H. Kane", "number": 9, "pos": "F" } }
+          ],
+          "substitutes": [
+            { "player": { "id": 10, "name": "T. Müller", "number": 25, "pos": "M" } }
+          ]
+        }
+      ],
+      "statistics": [
+        {
+          "team": { "id": 157, "name": "Bayern Munich" },
+          "statistics": [
+            { "type": "Shots on Goal", "value": 8 },
+            { "type": "Shots off Goal", "value": 4 },
+            { "type": "Total Shots", "value": 12 },
+            { "type": "Blocked Shots", "value": 3 },
+            { "type": "Ball Possession", "value": "62%" },
+            { "type": "Corner Kicks", "value": 7 },
+            { "type": "Offsides", "value": 2 },
+            { "type": "Fouls", "value": 9 },
+            { "type": "Yellow Cards", "value": 1 },
+            { "type": "Passes", "value": 584 },
+            { "type": "Pass Accuracy", "value": "89%" }
+          ]
+        },
+        {
+          "team": { "id": 165, "name": "Borussia Dortmund" },
+          "statistics": [
+            { "type": "Shots on Goal", "value": 4 },
+            { "type": "Shots off Goal", "value": 5 },
+            { "type": "Total Shots", "value": 9 },
+            { "type": "Blocked Shots", "value": 4 },
+            { "type": "Ball Possession", "value": "38%" },
+            { "type": "Corner Kicks", "value": 3 },
+            { "type": "Offsides", "value": 1 },
+            { "type": "Fouls", "value": 12 },
+            { "type": "Yellow Cards", "value": 3 },
+            { "type": "Passes", "value": 356 },
+            { "type": "Pass Accuracy", "value": "78%" }
+          ]
+        }
+      ]
+    }
+  ]
+}

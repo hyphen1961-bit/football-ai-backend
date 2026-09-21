@@ -3,6 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 import httpx
 import os
+import json
+from pathlib import Path
+# Berechne den Pfad zur JSON-Datei relativ zu dieser main.py
+BASE_DIR = Path(__file__).resolve().parent
+MOCK_DATA_PATH = BASE_DIR / "mock_football_data.json"
+import json
+from pathlib import Path
+USE_MOCK_DATA = True
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import Optional
@@ -72,6 +80,137 @@ def get_next_fixtures():
 # ============ ANALYSIS ============
 @app.post("/analyze/{fixture_id}")
 def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
+    print(f"Starte KI-Analyse für Fixture {fixture_id}...")
+    
+    form_home = {}
+    form_away = {}
+    injuries = {}
+    h2h = {}
+    odds = {}
+
+    if USE_MOCK_DATA:
+        print("🕵️‍♂️ Moritz-Modus aktiv: Lade lokale Mock-Daten...")
+        try:
+            mock_file_path = Path(__file__).parent / "mock_football_data.json"
+            with open(mock_file_path, "r", encoding="utf-8") as f:
+                mock_response = json.load(f)
+            
+            mock_data = mock_response['response'][0]
+            
+            # Wir simulieren die API-Struktur für die weiteren Berechnungen
+            form_home = {"response": [mock_data]} 
+            form_away = {"response": [mock_data]}
+            injuries = {"response": []} 
+            h2h = {"response": [mock_data]} 
+            
+            # Odds aus dem JSON oder Fallback
+            if 'odds' in mock_data and mock_data['odds']:
+                odds = {"response": mock_data['odds']}
+            else:
+                odds = {"response": [{"bookmakers": [{"bets": [{"name": "Match Winner", "values": [{"value": "Home", "odd": "1.80"}, {"value": "Draw", "odd": "3.50"}, {"value": "Away", "odd": "4.20"}]}]}]}]}
+
+        except FileNotFoundError:
+            raise HTTPException(status_code=500, detail="Mock-Datei nicht gefunden! Stell sicher, dass mock_football_data.json im Backend-Ordner liegt.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Fehler beim Laden der Mock-Daten: {str(e)}")
+
+    else:
+        # --- Der originale Code für den Live-Betrieb ---
+        try:
+            form_home = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_home_id}&last=5", headers=api_headers, timeout=10).json()
+            form_away = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_away_id}&last=5", headers=api_headers, timeout=10).json()
+            injuries = httpx.get(f"https://v3.football.api-sports.io/injuries?fixture={fixture_id}", headers=api_headers, timeout=10).json()
+            h2h = httpx.get(f"https://v3.football.api-sports.io/fixtures/headtohead?h2h={team_home_id}-{team_away_id}&last=5", headers=api_headers, timeout=10).json()
+            odds = httpx.get(f"https://v3.football.api-sports.io/odds?fixture={fixture_id}", headers=api_headers, timeout=10).json()
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"API-Fehler: {str(e)}")
+
+    # --- Die schlaue KI-Logik von Moritz ---
+    def count_wins(fixtures_data, team_id):
+        wins = 0
+        for match in fixtures_data.get('response', []):
+            if match['teams']['home']['id'] == team_id and match['teams']['home']['winner']:
+                wins += 1
+            elif match['teams']['away']['id'] == team_id and match['teams']['away']['winner']:
+                wins += 1
+        return wins
+
+    wins_home = count_wins(form_home, team_home_id)
+    wins_away = count_wins(form_away, team_away_id)
+    
+    injuries_home, injuries_away = [], []
+    for team_data in injuries.get('response', []):
+        if team_data['team']['id'] == team_home_id:
+            injuries_home = [i['player']['name'] for i in team_data.get('injuries', [])]
+        elif team_data['team']['id'] == team_away_id:
+            injuries_away = [i['player']['name'] for i in team_data.get('injuries', [])]
+
+    h2h_home_wins, h2h_away_wins = 0, 0
+    for match in h2h.get('response', []):
+        if match['teams']['home']['id'] == team_home_id and match['teams']['home']['winner']:
+            h2h_home_wins += 1
+        elif match['teams']['away']['id'] == team_away_id and match['teams']['away']['winner']:
+            h2h_away_wins += 1
+
+    odds_home, odds_draw, odds_away = 0.0, 0.0, 0.0
+    if odds.get('response'):
+        bookmakers = odds['response'][0].get('bookmakers', [])
+        if bookmakers:
+            for bet in bookmakers[0].get('bets', []):
+                if bet['name'] == 'Match Winner':
+                    for val in bet['values']:
+                        if val['value'] == 'Home': odds_home = float(val['odd'])
+                        elif val['value'] == 'Draw': odds_draw = float(val['odd'])
+                        elif val['value'] == 'Away': odds_away = float(val['odd'])
+
+    # Erweiterte Statistik-Analyse (nur wenn Daten vorhanden)
+    possession_bonus = 0
+    shots_bonus = 0
+    
+    if not USE_MOCK_DATA or 'statistics' in mock_data: # Im Mock-Modus haben wir stats in mock_data
+        stats_source = form_home.get('response', [{}])[0].get('statistics', []) if not USE_MOCK_DATA else mock_data.get('statistics', [])
+        
+        for stat_block in stats_source:
+            if stat_block['team']['id'] == team_home_id:
+                home_stats = {s['type']: s['value'] for s in stat_block['statistics']}
+            elif stat_block['team']['id'] == team_away_id:
+                away_stats = {s['type']: s['value'] for s in stat_block['statistics']}
+        
+        if 'home_stats' in locals() and 'away_stats' in locals():
+            poss_home = int(home_stats.get('Ball Possession', '0%').replace('%', ''))
+            poss_away = int(away_stats.get('Ball Possession', '0%').replace('%', ''))
+            if poss_home > 60: possession_bonus += 5
+            elif poss_away > 60: possession_bonus -= 5
+            
+            shots_home = int(home_stats.get('Total Shots', 0))
+            shots_away = int(away_stats.get('Total Shots', 0))
+            if shots_home > shots_away + 3: shots_bonus += 3
+            elif shots_away > shots_home + 3: shots_bonus -= 3
+
+    score = 50 + (wins_away - wins_home) * 5 + (h2h_away_wins - h2h_home_wins) * 4 - len(injuries_away) * 5 + len(injuries_home) * 3 + possession_bonus + shots_bonus
+    
+    if odds_away > 0 and odds_home > 0 and odds_away < odds_home:
+        score += 10
+        
+    score = max(0, min(100, score)) # Strikte Begrenzung zwischen 0 und 100
+    prediction = "Away" if score > 55 else ("Home" if score < 45 else "Draw")
+
+    analysis_data = {
+        "api_fixture_id": fixture_id,
+        "form_home": [f"{m['teams']['home']['name']} ({'W' if m['teams']['home']['winner'] else 'L'})" for m in form_home.get('response', [])],
+        "form_away": [f"{m['teams']['away']['name']} ({'W' if m['teams']['away']['winner'] else 'L'})" for m in form_away.get('response', [])],
+        "injuries_home": injuries_home,
+        "injuries_away": injuries_away,
+        "h2h_stats": {"home_wins": h2h_home_wins, "away_wins": h2h_away_wins},
+        "odds_home": odds_home, "odds_draw": odds_draw, "odds_away": odds_away,
+        "home_advantage_factor": 1.10,
+        "context_notes": f"KI-Analyse: Form Home {wins_home}/5, Away {wins_away}/5 | Stats-Bonus: {possession_bonus + shots_bonus}",
+        "ai_prediction": prediction,
+        "confidence_score": score
+    }
+    supabase.table('match_analysis').upsert(analysis_data, on_conflict='api_fixture_id').execute()
+    return {"fixture_id": fixture_id, "prediction": prediction, "confidence_score": score, "message": f"Analyse gespeichert! KI tippt: {prediction} ({score}%)"}
+
     print(f"Starte KI-Analyse für Fixture {fixture_id}...")
     form_home = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_home_id}&last=5", headers=api_headers).json()
     form_away = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_away_id}&last=5", headers=api_headers).json()
