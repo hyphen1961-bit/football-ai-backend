@@ -365,3 +365,19 @@ def get_ranking():
         return {"message": "Ranking wird geladen", "data": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    @app.get("/test-dir")
+def test_directory():
+    import os
+    from pathlib import Path
+    
+    current_path = Path(__file__).parent.resolve()
+    root_path = current_path.parent.resolve()
+    
+    # Wir suchen nach der Datei im aktuellen Ordner und im Ordner drüber
+    return {
+        "current_file_location": str(__file__),
+        "backend_folder_resolved": str(current_path),
+        "files_in_backend": os.listdir(current_path) if current_path.exists() else "not found",
+        "files_in_root": os.listdir(root_path) if root_path.exists() else "not found",
+        "current_working_dir": os.getcwd()
+    }
