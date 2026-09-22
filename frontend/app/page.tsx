@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- HARTE VERBINDUNGSDATEN (Von Max & Meister Tianzi final versiegelt!) ---
-const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
+const SUPABASE_URL = 'https://supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
 const API_URL = 'http://football-ai-backend-production-a405.up.railway.app';
 // ----------------------------------------------------------------------------
@@ -12,7 +12,6 @@ const API_URL = 'http://football-ai-backend-production-a405.up.railway.app';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 interface Match {
-
   api_fixture_id: number;
   home_team: string;
   away_team: string;
@@ -28,15 +27,13 @@ export default function Home() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const API_URL = 'https://railway.app';
-
   useEffect(() => {
     async function checkSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setUserId(session.user.id);
-         const { data } = await supabase.from('users').select('username, display_name, avatar_url').eq('id', session.user.id).single();
+          const { data } = await supabase.from('users').select('username, display_name, avatar_url').eq('id', session.user.id).single();
           if (data) {
             setUsername(data.display_name || data.username || 'Kumpel');
             setSupportKey(data.avatar_url || 'Hyphen-KEY');
@@ -47,34 +44,39 @@ export default function Home() {
     checkSession();
   }, []);
 
-  c  const loadMatches = async () => {
+  const loadMatches = async () => {
     try {
-      // Meister Tianzi brennt deine gesunde API-URL direkt ein!
-      const res = await fetch('http://football-ai-backend-production-a405.up.railway.app');
+      // Nutzt jetzt die echte API_URL und steuert den korrekten Matches-Endpoint an
+      const res = await fetch(`${API_URL}/api/matches`);
       const data = await res.json();
-      setMatches(data);
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+      setMatches(Array.isArray(data) ? data : []);
+    } catch (error) { 
+      console.error(error); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
-  c  const handleRegister = async () => {
+  const handleRegister = async () => {
     if (!username.trim()) return;
     setLoading(true);
     try {
-      // 1. Der echte anonyme Login bei Supabase
+      // 1. Anonymer Login bei Supabase
       const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
       if (authError) throw authError;
       const anonymousUserId = authData.user!.id;
       
-      // 2. Deinen Hyphen-Support-Key im Frontend auswürfeln
+      // 2. Hyphen-Support-Key generieren
       const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
       const signatureSupportKey = `Hyphen-${randomCode}`;
       
-      // 3. Eintrag direkt in eurer Tabelle via .from() aktualisieren
-      const { error: updateError } = await supabase.from('users').update({ 
-      username: username.trim(), 
-      display_name: username.trim(), 
-      avatar_url: signatureSupportKey 
-      }).eq('id', anonymousUserId);
+      // 3. Zeile in der Tabelle anlegen oder aktualisieren
+      const { error: updateError } = await supabase.from('users').upsert({ 
+        id: anonymousUserId,
+        username: username.trim(), 
+        display_name: username.trim(), 
+        avatar_url: signatureSupportKey 
+      });
       
       if (updateError) throw updateError;
       setUserId(anonymousUserId);
@@ -82,7 +84,11 @@ export default function Home() {
       localStorage.setItem('hyphen_user_id', anonymousUserId);
       localStorage.setItem('hyphen_support_key', signatureSupportKey);
       setShowRegisterModal(false);
-    } catch (error: any) { alert(`Fehler: ${error.message}`); } finally { setLoading(false); }
+    } catch (error: any) { 
+      alert(`Fehler: ${error.message}`); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   if (loading) {
@@ -114,25 +120,31 @@ export default function Home() {
 
       <div className="container mx-auto px-4 py-10 max-w-6xl">
         <h1 className="text-4xl font-black text-center mb-12 uppercase tracking-wide bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">🏟️ Spielplan & Vorhersagen 🏟️</h1>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {matches.map((match) => (
-            <div key={match.api_fixture_id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl hover:border-purple-500/50 transition-all duration-300 flex flex-col justify-between">
-              <div>
-                <div className="text-xs font-mono text-slate-400 mb-2">{new Date(match.date).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-                <div className="text-lg font-bold mb-4">{match.home_team} <span className="text-purple-400">vs</span> {match.away_team}</div>
-                {match.analysis ? (
-                  <div className="mb-6 p-3 bg-slate-900 border border-purple-900/40 rounded-lg">
-                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">KI-Prognose:</span>
-                    <div className="text-base font-black text-purple-400 mt-0.5">{match.analysis.ai_prediction} ({match.analysis.confidence_score}%)</div>
-                  </div>
-                ) : (
-                  <div className="mb-6 p-3 bg-slate-900/50 text-xs text-slate-500 rounded-lg italic">Keine KI-Analyse für diese Partie hinterlegt.</div>
-                )}
+        {matches.length === 0 ? (
+          <div className="text-center text-slate-400 py-12 bg-gray-800/50 rounded-xl border border-gray-700">
+            Keine aktiven Spiele geladen. Der Railway-Server läuft, liefert aber noch keine Spieldaten.
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {matches.map((match) => (
+              <div key={match.api_fixture_id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl hover:border-purple-500/50 transition-all duration-300 flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-mono text-slate-400 mb-2">{new Date(match.date).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                  <div className="text-lg font-bold mb-4">{match.home_team} <span className="text-purple-400">vs</span> {match.away_team}</div>
+                  {match.analysis ? (
+                    <div className="mb-6 p-3 bg-slate-900 border border-purple-900/40 rounded-lg">
+                      <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">KI-Prognose:</span>
+                      <div className="text-base font-black text-purple-400 mt-0.5">{match.analysis.ai_prediction} ({match.analysis.confidence_score}%)</div>
+                    </div>
+                  ) : (
+                    <div className="mb-6 p-3 bg-slate-900/50 text-xs text-slate-500 rounded-lg italic">Keine KI-Analyse für diese Partie hinterlegt.</div>
+                  )}
+                </div>
+                <button className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">Spiel aktiv ⚽</button>
               </div>
-              <button className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">Spiel aktiv ⚽</button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
