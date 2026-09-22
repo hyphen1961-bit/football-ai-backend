@@ -5,8 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+const sAPI_URL = 'https://railway.app';
 interface Match {
   api_fixture_id: number;
   home_team: string;
