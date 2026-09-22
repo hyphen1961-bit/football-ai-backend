@@ -22,14 +22,6 @@ export default function Home() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showTipModal, setShowTipModal] = useState(false);
-  const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
-  const [tipPrediction, setTipPrediction] = useState('');
-  const [tipOverUnder, setTipOverUnder] = useState('');
-  const [tipBtts, setTipBtts] = useState('');
-  const [tipDoubleChance, setTipDoubleChance] = useState('');
-  const [exactHome, setExactHome] = useState('');
-  const [exactAway, setExactAway] = useState('');
 
   const API_URL = 'https://railway.app';
 
@@ -83,32 +75,7 @@ export default function Home() {
     } catch (error: any) { alert(`Fehler: ${error.message}`); } finally { setLoading(false); }
   };
 
-  const openTipModal = (match: Match) => {
-    setCurrentMatch(match); setTipPrediction(''); setTipOverUnder(''); setTipBtts(''); setTipDoubleChance(''); setExactHome(''); setExactAway(''); setShowTipModal(true);
-  };
-
-  const submitTip = async () => {
-    if (!userId || !currentMatch || !tipPrediction) return;
-    try {
-      const res = await fetch(`${API_URL}/tips`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          api_fixture_id: currentMatch.api_fixture_id,
-          predicted_winner: tipPrediction,
-          tip_over_under: tipOverUnder || null,
-          tip_btts: tipBtts || null,
-          tip_double_chance: tipDoubleChance || null,
-          tip_exact_score_home: exactHome ? parseInt(exactHome, 10) : null,
-          tip_exact_score_away: exactAway ? parseInt(exactAway, 10) : null
-        })
-      });
-      if (res.ok) { alert('✅ Tipps erfolgreich gespeichert!'); setShowTipModal(false); } else { alert('❌ Fehler beim Speichern.'); }
-    } catch (error) { alert('💥 Verbindungsfehler!'); }
-  };
-
-  if (loading && !showTipModal) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-white text-2xl font-bold animate-pulse">Meister Tianzi ordnet die Fussball-Kette...</div>
@@ -123,7 +90,7 @@ export default function Home() {
           <div className="bg-gray-800 border border-purple-500 rounded-2xl p-8 max-w-md w-full shadow-2xl">
             <h2 className="text-3xl font-extrabold mb-4 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Hyphen Kumpel-Tipp</h2>
             <input type="text" placeholder="Dein Anzeigename" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 rounded-xl bg-gray-900 text-white mb-6 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700" />
-            <button onClick={handleRegister} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 font-bold py-4 rounded-xl transition-all shadow-lg">Jetzt starten 🚀</button>
+            <button onClick={handleRegister} className="w-full bg-gradient-to-r from-purple-600 to-pink-400 font-bold py-4 rounded-xl transition-all shadow-lg">Jetzt starten 🚀</button>
           </div>
         </div>
       )}
@@ -152,27 +119,11 @@ export default function Home() {
                   <div className="mb-6 p-3 bg-slate-900/50 text-xs text-slate-500 rounded-lg italic">Keine KI-Analyse für diese Partie hinterlegt.</div>
                 )}
               </div>
-              <button onClick={() => openTipModal(match)} className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">Tippschein ausfüllen 📋</button>
+              <button className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">Spiel aktiv ⚽</button>
             </div>
           ))}
         </div>
       </div>
-
-      {showTipModal && currentMatch && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-6">
-            <div className="flex justify-between items-center border-b border-gray-700 pb-3">
-              <h3 className="text-xl font-bold">{currentMatch.home_team} vs {currentMatch.away_team}</h3>
-              <button onClick={() => setShowTipModal(false)} className="text-slate-400 hover:text-white text-xl font-bold">✕</button>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-purple-300 mb-2">1. Spielausgang (1X2) *</label>
-              <div className="grid grid-cols-3 gap-2">
-                {['Home', 'Draw', 'Away'].map((opt) => (
-                  <button key={opt} onClick={() => setTipPrediction(tipPrediction === opt ? '' : opt)} className={`py-3 rounded-lg font-bold transition-all duration-200 ${tipPrediction === opt ? 'bg-purple-600 text-white ring-2 ring-purple-400 shadow-lg' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{opt === 'Home' ? 'Heim (1)' : opt === 'Draw' ? 'Unent. (X)' : 'Ausw. (2)'}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-blue-300 mb-2">2. Over/Under (2.5 Tore)</label>
-              <div className="grid grid-cols-2 gap-2">
+    </div>
+  );
+}
