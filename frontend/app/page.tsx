@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js'; // WICHTIG: Supabase Client importieren
 
 // Initialisiere den Supabase-Client direkt im Frontend
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://DEINE_SUPABASE_URL.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'DEIN_SUPABASE_ANON_KEY';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://https://knjgiaphysdgxenritzh.supabase.co';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 interface Match {
