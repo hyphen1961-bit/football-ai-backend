@@ -214,8 +214,46 @@ def submit_tip(tip: TipInput):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
+# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
 @app.post("/register-anonymous-user")
 def register_anonymous_user(user: RegisterUserInput):
+    import time  # Wichtig für die kleine Pause
+    try:
+        # Generiere einen zufälligen 4-stelligen Code aus Zahlen und Großbuchstaben
+        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        
+        # Max' offizielles Markenzeichen: Bindestrich-Verbindung!
+        signature_support_key = f"Hyphen-{random_code}"
+        
+        user_data = {
+            "id": user.user_id,
+            "username": user.username,
+            "deviation_reason": signature_support_key
+        }
+        
+        # Meister Tianzi schlägt die Timing-Falle: 3 Versuche mit kurzer Pause
+        for attempt in range(3):
+            try:
+                supabase.table('users').upsert(user_data, on_conflict='id').execute()
+                print(f"   ✅ User {user.username} erfolgreich bei Supabase registriert (Versuch {attempt + 1})")
+                break  # Erfolg! Schleife abbrechen
+            except Exception as db_err:
+                if attempt < 2:
+                    print(f"   ⚠️ Timing-Verzögerung bei Supabase. Warte kurz und probiere es erneut... (Versuch {attempt + 1})")
+                    time.sleep(0.5)  # Warte eine halbe Sekunde, bis Supabase die ID im Auth-System freigegeben hat
+                else:
+                    # Wenn alle 3 Versuche fehlschlagen, werfen wir den Fehler
+                    raise db_err
+        
+        return {
+            "message": "User erfolgreich im System registriert!",
+            "username": user.username,
+            "support_key": signature_support_key
+        }
+    except Exception as e:
+        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
     try:
         # Generiere einen zufälligen 4-stelligen Code aus Zahlen und Großbuchstaben
         random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
