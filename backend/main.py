@@ -179,3 +179,61 @@ def register_anonymous_user(user: RegisterUserInput):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+# ============ FIXTURE IMPORTER ============
+@app.get("/fetch-fixtures-from-api")
+def fetch_fixtures_from_api():
+    print("🚀 Starte Import der nächsten Bundesliga-Spiele...")
+    
+    try:
+        # Hole die nächsten 11 Spiele der Bundesliga (Liga 78) für Saison 2026
+        response = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=78&season=2026&next=11",
+            headers=api_headers,
+            timeout=15.0
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail=f"API-Fehler: Status {response.status_code}"
+            )
+        
+        data = response.json()
+        fixtures = data.get('response', [])
+        
+        if not fixtures:
+            return {"message": "Keine Spiele gefunden!", "count": 0}
+        
+        imported_count = 0
+        
+        # Jedes Spiel in die Supabase-Tabelle 'matches' eintragen
+        for fixture in fixtures:
+            match_data = {
+                "api_fixture_id": fixture['fixture']['id'],
+                "home_team": fixture['teams']['home']['name'],
+                "away_team": fixture['teams']['away']['name'],
+                "date": fixture['fixture']['date']
+            }
+            
+            supabase.table('matches').upsert(
+                match_data, 
+                on_conflict='api_fixture_id'
+            ).execute()
+            
+            imported_count += 1
+            print(f"   ✅ Importiert: {match_data['home_team']} vs {match_data['away_team']}")
+        
+        print(f"🎯 Import abgeschlossen! {imported_count} Spiele gespeichert.")
+        
+        return {
+            "message": f"Erfolgreich {imported_count} Bundesliga-Spiele importiert!",
+            "count": imported_count,
+            "season": 2026,
+            "league": "Bundesliga"
+        }
+        
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="API-Timeout beim Abrufen der Spiele")
+    except Exception as e:
+        print(f"💥 Fehler beim Import: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import-Fehler: {str(e)}")
