@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+// Meister Tianzi hat die echten Projektschlüssel hier fest verankert!
 const SUPABASE_URL = 'https://supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const API_URL = 'https://railway.app';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
- interface Match {
-  api_fixture_id: number; 
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+interface Match {
+  api_fixture_id: number;
   home_team: string;
   away_team: string;
   date: string;
@@ -19,12 +20,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
 export default function Home() {
+  // --- Auth & User States ---
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [supportKey, setSupportKey] = useState<string | null>(null);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+
+  // --- Data States ---
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // --- Tipp-Fenster (Modal) States ---
   const [showTipModal, setShowTipModal] = useState(false);
   const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
   const [tipPrediction, setTipPrediction] = useState<string>('');
@@ -39,6 +45,7 @@ export default function Home() {
   useEffect(() => {
     const storedUserId = localStorage.getItem('hyphen_user_id');
     const storedKey = localStorage.getItem('hyphen_support_key');
+    
     if (storedUserId && storedKey) {
       setUserId(storedUserId);
       setSupportKey(storedKey);
@@ -63,17 +70,23 @@ export default function Home() {
 
   const handleRegister = async () => {
     if (!username.trim()) return;
+    
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Keine ID erhalten');
-      const anonymousUserId = authData.user.id;
+      // Plan B: Wir generieren die eindeutige ID direkt im Browser!
+      const anonymousUserId = crypto.randomUUID();
+      
       const res = await fetch(`${API_URL}/register-anonymous-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: anonymousUserId, username: username.trim() })
+        body: JSON.stringify({
+          user_id: anonymousUserId,
+          username: username.trim()
+        })
       });
+      
+      if (!res.ok) throw new Error('Server-Antwort war nicht ok');
       const data = await res.json();
+      
       if (data.support_key) {
         setUserId(anonymousUserId);
         setSupportKey(data.support_key);
@@ -82,8 +95,8 @@ export default function Home() {
         setShowRegisterModal(false);
       }
     } catch (error) {
-      console.error('Registrierungsfehler:', error);
-      alert('Fehler bei der Kumpel-Registrierung.');
+      console.error('Registrierungsfehler im Frontend:', error);
+      alert('Hoppla! Der Server ist gerade ausgelastet. Bitte versuche es noch einmal.');
     }
   };
 
@@ -107,6 +120,7 @@ export default function Home() {
       alert('Bitte wähle mindestens den Haupt-Tipp (1X2) aus.');
       return;
     }
+    
     try {
       const res = await fetch(`${API_URL}/tips`, {
         method: 'POST',
@@ -122,6 +136,7 @@ export default function Home() {
           tip_exact_score_away: exactAway ? parseInt(exactAway, 10) : null
         })
       });
+      
       if (res.ok) {
         alert('✅ Sämtliche Kumpel-Tipps erfolgreich im System eingeloggt!');
         setShowTipModal(false);
@@ -145,21 +160,38 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white font-sans pb-12">
+      
       {showRegisterModal && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-gray-800 border border-purple-500 rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <h2 className="text-3xl font-extrabold mb-4 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Hyphen Kumpel-Tipp</h2>
+            <h2 className="text-3xl font-extrabold mb-4 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Hyphen Kumpel-Tipp
+            </h2>
             <p className="text-xs text-slate-400 mb-6 text-center">Keine E-Mail, kein Passwort. Absolut anonym mitmachen!</p>
-            <input type="text" placeholder="Dein Anzeigename" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 rounded-xl bg-gray-900 text-white mb-6 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700" />
-            <button onClick={handleRegister} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 font-bold py-4 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg">Jetzt starten 🚀</button>
+            <input
+              type="text"
+              placeholder="Dein Anzeigename"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full p-4 rounded-xl bg-gray-900 text-white mb-6 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700"
+            />
+            <button
+              onClick={handleRegister}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 font-bold py-4 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg"
+            >
+              Jetzt starten 🚀
+            </button>
           </div>
         </div>
       )}
+
       {supportKey && (
         <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-6 text-center shadow-2xl border-b border-purple-400/30">
           <div className="text-xs opacity-80 mb-1 uppercase tracking-widest">Dein Support-Schlüssel:</div>
           <div className="text-3xl font-mono font-black tracking-wider mb-2">{supportKey}</div>
-          <div className="text-base font-bold bg-black/20 max-w-xl mx-auto py-2 px-4 rounded-xl">Gib Hyphen diesen Schlüssel – der Geist im Hintergrund hilft. 👻</div>
+          <div className="text-base font-bold bg-black/20 max-w-xl mx-auto py-2 px-4 rounded-xl">
+            Gib Hyphen diesen Schlüssel – der Geist im Hintergrund hilft. 👻
+          </div>
         </div>
       )}
       <div className="container mx-auto px-4 py-10 max-w-6xl">
@@ -234,7 +266,7 @@ export default function Home() {
             </div>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowTipModal(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg">Abbrechen</button>
-              <button onClick={submitTip} className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-3 rounded-lg shadow-lg transform hover:scale-105">Tipp speichern 🚀</button>
+              <button onClick={submitTip} className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-3 rounded-xl shadow-lg transform hover:scale-105">Tipp speichern 🚀</button>
             </div>
           </div>
         </div>
