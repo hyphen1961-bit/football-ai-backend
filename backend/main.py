@@ -81,30 +81,29 @@ def get_next_fixtures():
 
 # ============ ANALYSIS ============
 # ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
-# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
+
 @app.post("/register-anonymous-user")
 def register_anonymous_user(user: RegisterUserInput):
-    from uuid import UUID  # Der offizielle Typen-Retter für Supabase
+    from uuid import UUID
     try:
-        # Generiere einen zufälligen 4-stelligen Code für Max' Markenzeichen
+        # Generiere deinen unverkennbaren Hyphen-Schlüssel
         random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
         signature_support_key = f"Hyphen-{random_code}"
         
-        # Meister Tianzi schlägt die Typen-Falle: Wir wandeln es sicherheitshalber in eine echte UUID um!
-        try:
-            clean_id = UUID(user.user_id)
-        except Exception:
-            clean_id = user.user_id  # Falls es doch ein Text sein muss
+        # Wir wandeln die ID in eine echte UUID um, damit die Fremdschlüssel-Regel greift!
+        clean_uuid = UUID(user.user_id)
         
+        # Wir passen die Felder exakt an dein SQL-Schema an:
+        # Wir nutzen 'display_name', um den Hyphen-Key zu speichern, da 'deviation_reason' fehlt!
         user_data = {
-            "id": clean_id,
+            "id": str(clean_uuid),
             "username": user.username,
-            "deviation_reason": signature_support_key
+            "display_name": signature_support_key
         }
         
-        # Direktes Abspeichern in eurer komplett geputzten Tabelle
+        # Sicheres Abspeichern via upsert nach den echten Regeln der DB
         supabase.table('users').upsert(user_data, on_conflict='id').execute()
-        print(f"   ✅ Kumpel {user.username} erfolgreich in der Datenbank registriert!")
+        print(f"   ✅ Kumpel {user.username} erfolgreich im echten SQL-Schema registriert!")
         
         return {
             "message": "User erfolgreich im System registriert!",
@@ -115,77 +114,6 @@ def register_anonymous_user(user: RegisterUserInput):
         print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
 
-    try:
-        # Generiere einen zufälligen 4-stelligen Code für Max' Markenzeichen
-        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        signature_support_key = f"Hyphen-{random_code}"
-        
-        user_data = {
-            "id": user.user_id,  # Wir speichern die ID direkt als Text
-            "username": user.username,
-            "deviation_reason": signature_support_key
-        }
-        
-        # Direktes, unkompliziertes Abspeichern in eurer geputzten Tabelle
-        supabase.table('users').upsert(user_data, on_conflict='id').execute()
-        print(f"   ✅ Kumpel {user.username} erfolgreich in der Datenbank registriert!")
-        
-        return {
-            "message": "User erfolgreich im System registriert!",
-            "username": user.username,
-            "support_key": signature_support_key
-        }
-    except Exception as e:
-        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
-
-    print(f"Starte KI-Analyse für Fixture {fixture_id}...")
-    form_home, form_away, injuries, h2h, odds = {}, {}, {}, {}, {}
-
-    if USE_MOCK_DATA:
-        try:
-            mock_file_path = Path(__file__).parent / "mock_football_data.json"
-            with open(mock_file_path, "r", encoding="utf-8") as f:
-                mock_response = json.load(f)
-            mock_data = mock_response['response'][0]
-            form_home = {"response": [mock_data]} 
-            form_away = {"response": [mock_data]}
-            injuries = {"response": []} 
-            h2h = {"response": [mock_data]} 
-            if 'odds' in mock_data and mock_data['odds']:
-                odds = {"response": mock_data['odds']}
-            else:
-                odds = {"response": [{"bookmakers": [{"bets": [{"name": "Match Winner", "values": [{"value": "Home", "odd": "1.80"}, {"value": "Draw", "odd": "3.50"}, {"value": "Away", "odd": "4.20"}]}]}]}]}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Fehler beim Laden der Mock-Daten: {str(e)}")
-    else:
-        try:
-            form_home = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_home_id}&last=5", headers=api_headers, timeout=10).json()
-            form_away = httpx.get(f"https://v3.football.api-sports.io/fixtures?team={team_away_id}&last=5", headers=api_headers, timeout=10).json()
-            injuries = httpx.get(f"https://v3.football.api-sports.io/injuries?fixture={fixture_id}", headers=api_headers, timeout=10).json()
-            h2h = httpx.get(f"https://v3.football.api-sports.io/fixtures/headtohead?h2h={team_home_id}-{team_away_id}&last=5", headers=api_headers, timeout=10).json()
-            odds = httpx.get(f"https://v3.football.api-sports.io/odds?fixture={fixture_id}", headers=api_headers, timeout=10).json()
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"API-Fehler: {str(e)}")
-
-    def count_wins(fixtures_data, team_id):
-        wins = 0
-        for match in fixtures_data.get('response', []):
-            if match['teams']['home']['id'] == team_id and match['teams']['home']['winner']: wins += 1
-            elif match['teams']['away']['id'] == team_id and match['teams']['away']['winner']: wins += 1
-        return wins
-
-    wins_home = count_wins(form_home, team_home_id)
-    wins_away = count_wins(form_away, team_away_id)
-    
-    score = 50 + (wins_away - wins_home) * 5
-    score = max(0, min(100, score))
-    prediction = "Away" if score > 55 else ("Home" if score < 45 else "Draw")
-    
-    return {"fixture_id": fixture_id, "prediction": prediction, "confidence_score": score}
-
-# ============ MATCHES ============
-# ============ MATCHES MIT ANALYSE ============
 # ============ MATCHES MIT ANALYSE ============
 @app.get("/matches")
 async def get_matches():

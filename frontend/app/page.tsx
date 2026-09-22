@@ -69,7 +69,43 @@ export default function Home() {
     }
   };
 
-  const handleRegister = async () => {
+  const handleRe  const handleRegister = async () => {
+    if (!username.trim()) return;
+    
+    try {
+      // Wir erstellen die ZWINGEND erforderliche echte anonyme Session in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Keine valide User-ID von Supabase erhalten');
+
+      const anonymousUserId = authData.user.id;
+      
+      // Jetzt schicken wir die echte ID an dein FastAPI Backend auf Railway
+      const res = await fetch(`${API_URL}/register-anonymous-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: anonymousUserId,
+          username: username.trim()
+        })
+      });
+      
+      if (!res.ok) throw new Error('Server-Antwort war nicht ok');
+      const data = await res.json();
+      
+      if (data.support_key) {
+        setUserId(anonymousUserId);
+        setSupportKey(data.support_key);
+        localStorage.setItem('hyphen_user_id', anonymousUserId);
+        localStorage.setItem('hyphen_support_key', data.support_key);
+        setShowRegisterModal(false);
+      }
+    } catch (error: any) {
+      console.error('Registrierungsfehler:', error);
+      alert(`Hoppla! Verbindung steht, aber die Datenbank prüft noch: ${error.message}`);
+    }
+  };
+
     if (!username.trim()) return;
     
     try {
