@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 // --- HARTE VERBINDUNGSDATEN (Von Max & Meister Tianzi final versiegelt!) ---
 const SUPABASE_URL = 'https://supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
+const API_URL = 'https://railway.app';
 // ----------------------------------------------------------------------------
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -46,8 +46,8 @@ export default function Home() {
 
   const loadMatches = async () => {
     try {
-      // Nutzt jetzt die echte, verschlüsselte API_URL von deinem Railway-Server
-      const res = await fetch(`${API_URL}/api/matches`);
+      // Fragt jetzt den direkten Endpunkt ohne das /api-Präfix ab, um den 404 zu umgehen
+      const res = await fetch(`${API_URL}/matches`);
       const data = await res.json();
       setMatches(Array.isArray(data) ? data : []);
     } catch (error) { 
@@ -140,7 +140,7 @@ export default function Home() {
                     <div className="mb-6 p-3 bg-slate-900/50 text-xs text-slate-500 rounded-lg italic">Keine KI-Analyse für diese Partie hinterlegt.</div>
                   )}
                 </div>
-                <button className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">Spiel active ⚽</button>
+                <button className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">Spiel aktiv ⚽</button>
               </div>
             ))}
           </div>
