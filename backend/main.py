@@ -81,8 +81,40 @@ def get_next_fixtures():
 
 # ============ ANALYSIS ============
 # ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
+# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
 @app.post("/register-anonymous-user")
 def register_anonymous_user(user: RegisterUserInput):
+    from uuid import UUID  # Der offizielle Typen-Retter für Supabase
+    try:
+        # Generiere einen zufälligen 4-stelligen Code für Max' Markenzeichen
+        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        signature_support_key = f"Hyphen-{random_code}"
+        
+        # Meister Tianzi schlägt die Typen-Falle: Wir wandeln es sicherheitshalber in eine echte UUID um!
+        try:
+            clean_id = UUID(user.user_id)
+        except Exception:
+            clean_id = user.user_id  # Falls es doch ein Text sein muss
+        
+        user_data = {
+            "id": clean_id,
+            "username": user.username,
+            "deviation_reason": signature_support_key
+        }
+        
+        # Direktes Abspeichern in eurer komplett geputzten Tabelle
+        supabase.table('users').upsert(user_data, on_conflict='id').execute()
+        print(f"   ✅ Kumpel {user.username} erfolgreich in der Datenbank registriert!")
+        
+        return {
+            "message": "User erfolgreich im System registriert!",
+            "username": user.username,
+            "support_key": signature_support_key
+        }
+    except Exception as e:
+        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
     try:
         # Generiere einen zufälligen 4-stelligen Code für Max' Markenzeichen
         random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
