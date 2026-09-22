@@ -82,8 +82,44 @@ def get_next_fixtures():
 # ============ ANALYSIS ============
 # ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
 
+# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
 @app.post("/register-anonymous-user")
 def register_anonymous_user(user: RegisterUserInput):
+    from uuid import UUID
+    try:
+        # Generiere deinen unverkennbaren Hyphen-Schlüssel
+        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        signature_support_key = f"Hyphen-{random_code}"
+        
+        # ID zwingend in eine echte UUID umwandeln für den Fremdschlüssel
+        clean_uuid = UUID(user.user_id)
+        
+        # Wir befüllen die Felder EXAKT so, wie es dein echtes SQL-Schema verlangt:
+        user_data = {
+            "id": str(clean_uuid),
+            "username": user.username.strip(),      # Das eindeutige username-Feld
+            "display_name": user.username.strip(),  # Der Anzeigename für das Frontend
+            "email": f"{user.username.strip()}@anonymous.hyphen", # Platzhalter-E-Mail, um den Trigger zu beruhigen!
+            "role": "user"                         # Standardrolle laut Check-Constraint
+        }
+        
+        # Wir lagern deinen Hyphen-Key im ungenutzten 'avatar_url'-Feld, 
+        # da 'deviation_reason' im echten Schema nicht existiert!
+        user_data["avatar_url"] = signature_support_key
+        
+        # Abspeichern in eurer Tabelle
+        supabase.table('users').upsert(user_data, on_conflict='id').execute()
+        print(f"   ✅ Kumpel {user.username} erfolgreich im echten SQL-Schema registriert!")
+        
+        return {
+            "message": "User erfolgreich im System registriert!",
+            "username": user.username,
+            "support_key": signature_support_key
+        }
+    except Exception as e:
+        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
     from uuid import UUID
     try:
         # Generiere deinen unverkennbaren Hyphen-Schlüssel
