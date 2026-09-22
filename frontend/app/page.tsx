@@ -242,6 +242,134 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 3. DAS GROSSE ERWEITERTE TIPP-FENSTER (MODAL) */}
+            {/* Tipp-Modal */}
       {showTipModal && currentMatch && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-gray-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-purple-500 my-8">
+            <h3 className="text-2xl font-bold mb-2 text-center text-white">
+              {currentMatch.home_team} vs {currentMatch.away_team}
+            </h3>
+            <p className="text-center text-gray-400 mb-6 text-sm">Wähle deine Tipps (Pflichtfeld: 1X2)</p>
+
+            {/* 1. 1X2 (Pflicht) */}
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-purple-300 mb-2">1. Spielausgang (1X2) *</label>
+              <div className="grid grid-cols-3 gap-2">
+                {['Home', 'Draw', 'Away'].map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setTipPrediction(tipPrediction === opt ? '' : opt)}
+                    className={`py-3 rounded-lg font-bold transition-all duration-200 ${
+                      tipPrediction === opt 
+                        ? 'bg-purple-600 text-white ring-2 ring-purple-400 shadow-lg' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {opt === 'Home' ? 'Heim (1)' : opt === 'Draw' ? 'Unent. (X)' : 'Ausw. (2)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Over/Under */}
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-blue-300 mb-2">2. Over/Under (2.5 Tore)</label>
+              <div className="grid grid-cols-2 gap-2">
+                {['Over', 'Under'].map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setTipOverUnder(tipOverUnder === opt ? '' : opt)}
+                    className={`py-3 rounded-lg font-bold transition-all duration-200 ${
+                      tipOverUnder === opt 
+                        ? 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-lg' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {opt} 2.5
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. BTTS */}
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-yellow-300 mb-2">3. Beide Teams treffen (BTTS)</label>
+              <div className="grid grid-cols-2 gap-2">
+                {['Yes', 'No'].map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setTipBtts(tipBtts === opt ? '' : opt)}
+                    className={`py-3 rounded-lg font-bold transition-all duration-200 ${
+                      tipBtts === opt 
+                        ? 'bg-yellow-600 text-white ring-2 ring-yellow-400 shadow-lg' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {opt === 'Yes' ? 'Ja' : 'Nein'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 4. Doppelte Chance (Jetzt als klickbare Buttons!) */}
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-green-300 mb-2">4. Doppelte Chance</label>
+              <div className="grid grid-cols-3 gap-2">
+                {['1X', 'X2', '12'].map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setTipDoubleChance(tipDoubleChance === opt ? '' : opt)}
+                    className={`py-3 rounded-lg font-bold transition-all duration-200 ${
+                      tipDoubleChance === opt 
+                        ? 'bg-green-600 text-white ring-2 ring-green-400 shadow-lg' 
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {opt === '1X' ? 'Heim/Unent. (1X)' : opt === 'X2' ? 'Ausw./Unent. (X2)' : 'Heim/Ausw. (12)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 5. Exaktes Ergebnis */}
+            <div className="mb-8">
+              <label className="block text-sm font-bold text-pink-300 mb-2">5. Exaktes Ergebnis</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Heim"
+                  value={exactHome}
+                  onChange={(e) => setExactHome(e.target.value)}
+                  className="w-full p-3 rounded-lg bg-gray-700 text-white text-center border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pink-500 transition-all"
+                />
+                <span className="text-2xl font-bold text-gray-400">:</span>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Auswärts"
+                  value={exactAway}
+                  onChange={(e) => setExactAway(e.target.value)}
+                  className="w-full p-3 rounded-lg bg-gray-700 text-white text-center border border-gray-600 focus:outline-none focus:ring-2 focus:ring-pink-500 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Aktionen */}
+            <div className="flex gap-3 mt-8">
+              <button
+                onClick={() => setShowTipModal(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition-all duration-200"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={submitTip}
+                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
+              >
+                Tipp speichern 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
