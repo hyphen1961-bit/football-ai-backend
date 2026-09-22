@@ -80,8 +80,33 @@ def get_next_fixtures():
     return results
 
 # ============ ANALYSIS ============
-@app.post("/analyze/{fixture_id}")
-def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
+# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
+@app.post("/register-anonymous-user")
+def register_anonymous_user(user: RegisterUserInput):
+    try:
+        # Generiere einen zufälligen 4-stelligen Code für Max' Markenzeichen
+        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        signature_support_key = f"Hyphen-{random_code}"
+        
+        user_data = {
+            "id": user.user_id,  # Wir speichern die ID direkt als Text
+            "username": user.username,
+            "deviation_reason": signature_support_key
+        }
+        
+        # Direktes, unkompliziertes Abspeichern in eurer geputzten Tabelle
+        supabase.table('users').upsert(user_data, on_conflict='id').execute()
+        print(f"   ✅ Kumpel {user.username} erfolgreich in der Datenbank registriert!")
+        
+        return {
+            "message": "User erfolgreich im System registriert!",
+            "username": user.username,
+            "support_key": signature_support_key
+        }
+    except Exception as e:
+        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
     print(f"Starte KI-Analyse für Fixture {fixture_id}...")
     form_home, form_away, injuries, h2h, odds = {}, {}, {}, {}, {}
 
