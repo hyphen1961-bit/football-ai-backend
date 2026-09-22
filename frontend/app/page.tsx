@@ -5,9 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const API_URL = 'https://football-ai-backend-production.up.railway.app';
-// ----------------------------------------------------------------
-
+const API_URL = 'https://railway.app';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
 interface Match 
   api_fixture_id: number;
   home_team: string;
