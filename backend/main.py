@@ -129,8 +129,37 @@ def analyze_match(fixture_id: int, team_home_id: int, team_away_id: int):
 
 # ============ MATCHES ============
 # ============ MATCHES MIT ANALYSE ============
+# ============ MATCHES MIT ANALYSE ============
 @app.get("/matches")
 async def get_matches():
+    try:
+        # Alle Spiele aus der matches-Tabelle holen
+        matches_response = supabase.table("matches").select("*").execute()
+        matches = matches_response.data or []
+        
+        matches_with_analysis = []
+        
+        # Für jedes Spiel die Analyse aus match_analysis holen
+        for match in matches:
+            fixture_id = match["api_fixture_id"]
+            
+            # Analyse für dieses spezifische Spiel abfragen
+            analysis_response = supabase.table("match_analysis").select("*").eq("api_fixture_id", fixture_id).execute()
+            
+            # Wenn eine Analyse existiert, nimm die erste (sollte nur eine geben)
+            analysis = analysis_response.data[0] if analysis_response.data else None
+            
+            # Hänge die Analyse als Unter-Objekt an das Spiel
+            matches_with_analysis.append({
+                **match,
+                "analysis": analysis
+            })
+        
+        return matches_with_analysis
+        
+    except Exception as e:
+        print(f"Fehler beim Laden der Spiele: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     try:
         # Alle Spiele aus der matches-Tabelle holen
         matches_response = supabase.table("matches").select("*").execute()
