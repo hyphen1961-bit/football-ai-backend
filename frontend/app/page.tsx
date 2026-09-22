@@ -69,7 +69,7 @@ export default function Home() {
     }
   };
 
-  const handleRe  const handleRegister = async () => {
+  const handleRegister = async () => {
     if (!username.trim()) return;
     
     try {
