@@ -215,8 +215,49 @@ def submit_tip(tip: TipInput):
 
 # ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
 # ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
+# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
 @app.post("/register-anonymous-user")
 def register_anonymous_user(user: RegisterUserInput):
+    import time
+    from uuid import UUID  # <-- Der offizielle Typen-Retter für Supabase!
+    try:
+        # Generiere einen zufälligen 4-stelligen Code aus Zahlen und Großbuchstaben
+        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        
+        # Max' offizielles Markenzeichen: Bindestrich-Verbindung!
+        signature_support_key = f"Hyphen-{random_code}"
+        
+        # Wir wandeln die Text-ID vor dem Abspeichern in eine echte UUID um!
+        clean_uuid = UUID(user.user_id)
+        
+        user_data = {
+            "id": clean_uuid,
+            "username": user.username,
+            "deviation_reason": signature_support_key
+        }
+        
+        # 3 Versuche mit kurzer Pause für das Timing
+        for attempt in range(3):
+            try:
+                supabase.table('users').upsert(user_data, on_conflict='id').execute()
+                print(f"   ✅ User {user.username} erfolgreich bei Supabase registriert (Versuch {attempt + 1})")
+                break
+            except Exception as db_err:
+                if attempt < 2:
+                    print(f"   ⚠️ Timing-Verzögerung bei Supabase. Warte kurz... (Versuch {attempt + 1})")
+                    time.sleep(0.5)
+                else:
+                    raise db_err
+        
+        return {
+            "message": "User erfolgreich im System registriert!",
+            "username": user.username,
+            "support_key": signature_support_key
+        }
+    except Exception as e:
+        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
     import time  # Wichtig für die kleine Pause
     try:
         # Generiere einen zufälligen 4-stelligen Code aus Zahlen und Großbuchstaben
