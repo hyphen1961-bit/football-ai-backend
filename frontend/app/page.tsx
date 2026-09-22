@@ -47,24 +47,29 @@ export default function Home() {
     checkSession();
   }, []);
 
-  const loadMatches = async () => {
+  c  const loadMatches = async () => {
     try {
-      const res = await fetch(`${API_URL}/matches`);
+      // Meister Tianzi brennt deine gesunde API-URL direkt ein!
+      const res = await fetch('http://football-ai-backend-production-a405.up.railway.app');
       const data = await res.json();
       setMatches(data);
     } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
-  const handleRegister = async () => {
+  c  const handleRegister = async () => {
     if (!username.trim()) return;
     setLoading(true);
     try {
+      // 1. Der echte anonyme Login bei Supabase
       const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
       if (authError) throw authError;
       const anonymousUserId = authData.user!.id;
+      
+      // 2. Deinen Hyphen-Support-Key im Frontend auswürfeln
       const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
       const signatureSupportKey = `Hyphen-${randomCode}`;
       
+      // 3. Eintrag direkt in eurer Tabelle via .from() aktualisieren
       const { error: updateError } = await supabase.from('users').update({ 
         username: username.trim(), 
         display_name: username.trim(), 
@@ -79,6 +84,7 @@ export default function Home() {
       setShowRegisterModal(false);
     } catch (error: any) { alert(`Fehler: ${error.message}`); } finally { setLoading(false); }
   };
+
 
   if (loading) {
     return (
