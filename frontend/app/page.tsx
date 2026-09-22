@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js'; // WICHTIG: Supabase Client importieren
+import { createClient } from '@supabase/supabase-js';
 
-// Initialisiere den Supabase-Client direkt im Frontend
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://https://knjgiaphysdgxenritzh.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
+// Meister Tianzi hat die echten Projektschlüssel hier fest verankert!
+const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 interface Match {
@@ -20,17 +20,29 @@ interface Match {
 }
 
 export default function Home() {
-  const [matches, setMatches] = useState<Match[]>([]);
+  // --- Auth & User States ---
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [supportKey, setSupportKey] = useState<string | null>(null);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+
+  // --- Data States ---
+  const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // --- Tipp-Fenster (Modal) States ---
+  const [showTipModal, setShowTipModal] = useState(false);
+  const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
+  const [tipPrediction, setTipPrediction] = useState<string>('');
+  const [tipOverUnder, setTipOverUnder] = useState<string>('');
+  const [tipBtts, setTipBtts] = useState<string>('');
+  const [tipDoubleChance, setTipDoubleChance] = useState<string>('');
+  const [exactHome, setExactHome] = useState<string>('');
+  const [exactAway, setExactAway] = useState<string>('');
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://football-ai-backend-production.up.railway.app';
 
   useEffect(() => {
-    // Prüfe ob User bereits lokal registriert ist
     const storedUserId = localStorage.getItem('hyphen_user_id');
     const storedKey = localStorage.getItem('hyphen_support_key');
     
@@ -40,13 +52,13 @@ export default function Home() {
     } else {
       setShowRegisterModal(true);
     }
-    
     loadMatches();
   }, []);
 
   const loadMatches = async () => {
     try {
       const res = await fetch(`${API_URL}/matches`);
+      if (!res.ok) throw new Error('Netzwerkfehler');
       const data = await res.json();
       setMatches(data);
     } catch (error) {
@@ -60,15 +72,13 @@ export default function Home() {
     if (!username.trim()) return;
     
     try {
-      // HIER DIE RETTUNG: Wir erstellen die echte anonyme Session in Supabase Auth
+      // ECHTER ANONYMER LOGIN: Supabase erstellt die Session im System
       const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-      
       if (authError) throw authError;
-      if (!authData.user) throw new Error('Keine User-Daten von Supabase erhalten');
+      if (!authData.user) throw new Error('Keine ID erhalten');
 
       const anonymousUserId = authData.user.id;
       
-      // Jetzt schicken wir die echte ID an dein FastAPI Backend auf Railway
       const res = await fetch(`${API_URL}/register-anonymous-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,7 +89,6 @@ export default function Home() {
       });
       
       const data = await res.json();
-      
       if (data.support_key) {
         setUserId(anonymousUserId);
         setSupportKey(data.support_key);
@@ -88,128 +97,151 @@ export default function Home() {
         setShowRegisterModal(false);
       }
     } catch (error) {
-      console.error('Registrierungsfehler im Frontend:', error);
-      alert('Hoppla! Da ist beim Erstellen der Kumpel-Session etwas schiefgelaufen.');
+      console.error('Registrierungsfehler:', error);
+      alert('Fehler bei der Kumpel-Registrierung.');
     }
   };
 
-  const submitTip = async (fixtureId: number, prediction: string) => {
-    if (!userId) return;
+  const openTipModal = (match: Match) => {
+    setCurrentMatch(match);
+    setTipPrediction('');
+    setTipOverUnder('');
+    setTipBtts('');
+    setTipDoubleChance('');
+    setExactHome('');
+    setExactAway('');
+    setShowTipModal(true);
+  };
+
+  const submitTip = async () => {
+    if (!userId || !currentMatch) {
+      alert('Bitte wähle zuerst ein Spiel aus.');
+      return;
+    }
+    if (!tipPrediction) {
+      alert('Bitte wähle mindestens den Haupt-Tipp (1X2) aus.');
+      return;
+    }
     
     try {
-      await fetch(`${API_URL}/tips`, {
+      // Hier werden alle erweiterten Tipps dynamisch mitgeschickt!
+      const res = await fetch(`${API_URL}/tips`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
-          api_fixture_id: fixtureId,
-          predicted_winner: prediction
+          api_fixture_id: currentMatch.api_fixture_id,
+          predicted_winner: tipPrediction,
+          tip_over_under: tipOverUnder || null,
+          tip_btts: tipBtts || null,
+          tip_double_chance: tipDoubleChance || null,
+          tip_exact_score_home: exactHome ? parseInt(exactHome, 10) : null,
+          tip_exact_score_away: exactAway ? parseInt(exactAway, 10) : null
         })
       });
-      alert('Tipp im System eingeloggt! ⚽');
+      
+      if (res.ok) {
+        alert('✅ Sämtliche Kumpel-Tipps erfolgreich im System eingeloggt!');
+        setShowTipModal(false);
+      } else {
+        const errorData = await res.json();
+        alert(`❌ Fehler: ${errorData.detail || 'Unbekannter Fehler'}`);
+      }
     } catch (error) {
       console.error('Tipp-Fehler:', error);
+      alert('💥 Verbindungsfehler zum Server!');
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
-        <div className="text-white text-2xl animate-pulse">Lade Spiele für die Kumpels...</div>
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-white text-2xl font-bold animate-pulse">Meister Tianzi ordnet die Fussball-Kette...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white">
-      {/* Registrierungs-Modal */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white font-sans pb-12">
+      
+      {/* 1. REGISTRIERUNGS-MODAL */}
       {showRegisterModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="bg-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-purple-500">
-            <h2 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Willkommen beim Hyphen-Tipp!
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-gray-800 border border-purple-500 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <h2 className="text-3xl font-extrabold mb-4 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Hyphen Kumpel-Tipp
             </h2>
-            <p className="text-gray-400 text-sm mb-4 text-center">
-              Gib einfach einen Wunschnamen ein. Keine E-Mail, kein Passwort. Absolut anonym!
-            </p>
+            <p className="text-xs text-slate-400 mb-6 text-center">Keine E-Mail, kein Passwort. Absolut anonym mitmachen!</p>
             <input
               type="text"
-              placeholder="Dein Kumpel-Name"
+              placeholder="Dein Anzeigename"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full p-4 rounded-lg bg-gray-700 text-white mb-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              onKeyPress={(e) => e.key === 'Enter' && handleRegister()}
+              className="w-full p-4 rounded-xl bg-gray-900 text-white mb-6 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700"
             />
             <button
               onClick={handleRegister}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 rounded-lg transition-all transform hover:scale-105"
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 font-bold py-4 rounded-xl transition-all transform hover:scale-[1.02] shadow-lg"
             >
-              Als Kumpel beitreten 🚀
+              Jetzt starten 🚀
             </button>
           </div>
         </div>
       )}
 
-      {/* Hyphen-Schlüssel Anzeige */}
+      {/* 2. HYPHEN-SCHLÜSSEL ANZEIGE */}
       {supportKey && (
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-center shadow-lg animate-slideDown">
-          <div className="text-sm opacity-80 mb-1">Dein persönlicher Support-Schlüssel:</div>
-          <div className="text-3xl font-mono font-bold tracking-wider mb-2">{supportKey}</div>
-          <div className="text-lg font-bold">
-            Gib Hyphen diesen Schlüssel – der Geist im Hintergrund hilft. 👻
+        <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-6 text-center shadow-2xl border-b border-purple-400/30">
+          <div className="text-xs opacity-80 mb-1 uppercase tracking-widest">Dein Support-Schlüssel:</div>
+          <div className="text-3xl font-mono font-black tracking-wider mb-2">{supportKey}</div>
+          <div className="text-base font-bold bg-black/20 max-w-xl mx-auto py-2 px-4 rounded-xl">
+            Gib Hyphen diesen Schlüssel – der Geist im Hintergrund hilft. 0.1.12👻
           </div>
         </div>
       )}
 
-      {/* Hauptinhalt */}
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-5xl font-bold text-center mb-12 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-          ⚽ Hyphen Football AI ⚽
+      {/* HAUPTINHALT - LISTE DER MATCHES */}
+      <div className="container mx-auto px-4 py-10 max-w-6xl">
+        <h1 className="text-4xl font-black text-center mb-12 uppercase tracking-wide bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+          🏟️ Spielplan & Vorhersagen 🏟️
         </h1>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {matches.map((match) => (
-            <div key={match.api_fixture_id} className="bg-gray-800 rounded-xl p-6 shadow-xl border border-gray-700 hover:border-purple-500 transition-all duration-300">
-              <div className="text-sm text-gray-400 mb-2">
-                {new Date(match.date).toLocaleDateString('de-CH')}
-              </div>
-              <div className="text-xl font-bold mb-4">
-                {match.home_team} vs {match.away_team}
-              </div>
-              
-              {match.analysis && (
-                <div className="mb-4 p-3 bg-gray-900 rounded-lg border border-purple-900/50">
-                  <div className="text-sm text-gray-400">KI-Tipp-Tendenz:</div>
-                  <div className="text-lg font-bold text-purple-400">
-                    {match.analysis.ai_prediction} ({match.analysis.confidence_score}%)
-                  </div>
+            <div key={match.api_fixture_id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl hover:border-purple-500/50 transition-all duration-300 flex flex-col justify-between">
+              <div>
+                <div className="text-xs font-mono text-slate-400 mb-2">
+                  {new Date(match.date).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 </div>
-              )}
-
-              <div className="grid grid-cols-3 gap-2 mt-4">
-                <button
-                  onClick={() => submitTip(match.api_fixture_id, 'Home')}
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition-all active:scale-95"
-                >
-                  1 (Heim)
-                </button>
-                <button
-                  onClick={() => submitTip(match.api_fixture_id, 'Draw')}
-                  className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 rounded-lg transition-all active:scale-95"
-                >
-                  X (Remis)
-                </button>
-                <button
-                  onClick={() => submitTip(match.api_fixture_id, 'Away')}
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition-all active:scale-95"
-                >
-                  2 (Auswärts)
-                </button>
+                <div className="text-lg font-bold mb-4">
+                  {match.home_team} <span className="text-purple-400">vs</span> {match.away_team}
+                </div>
+                
+                {match.analysis ? (
+                  <div className="mb-6 p-3 bg-slate-900 border border-purple-900/40 rounded-lg">
+                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">KI-Prognose:</span>
+                    <div className="text-base font-black text-purple-400 mt-0.5">
+                      {match.analysis.ai_prediction} ({match.analysis.confidence_score}%)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-6 p-3 bg-slate-900/50 text-xs text-slate-500 rounded-lg italic">
+                    Keine KI-Analyse für diese Partie hinterlegt.
+                  </div>
+                )}
               </div>
+
+              <button
+                onClick={() => openTipModal(match)}
+                className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md"
+              >
+                Tippschein ausfüllen 📋
+              </button>
             </div>
           ))}
         </div>
       </div>
-    </div>
-  );
-}
+
+      {/* 3. DAS GROSSE ERWEITERTE TIPP-FENSTER (MODAL) */}
+      {showTipModal && currentMatch && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm overflow-y-auto">
