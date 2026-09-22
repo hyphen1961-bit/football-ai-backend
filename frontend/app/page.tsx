@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- HARTE VERBINDUNGSDATEN (Von Max & Meister Tianzi final versiegelt!) ---
-const SUPABASE_URL = 'https://supabase.co';
+const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const API_URL = 'http://football-ai-backend-production-a405.up.railway.app';
+const API_URL = 'https://railway.app';
 // ----------------------------------------------------------------------------
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
