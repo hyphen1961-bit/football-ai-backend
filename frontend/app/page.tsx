@@ -36,7 +36,7 @@ export default function Home() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setUserId(session.user.id);
-          const { data } = await supabase.from('users').select('username, display_name, avatar_url').eq('id', session.user.id).single();
+         const { data } = await supabase.from('users').select('username, display_name, avatar_url').eq('id', session.user.id).single();
           if (data) {
             setUsername(data.display_name || data.username || 'Kumpel');
             setSupportKey(data.avatar_url || 'Hyphen-KEY');
@@ -71,9 +71,9 @@ export default function Home() {
       
       // 3. Eintrag direkt in eurer Tabelle via .from() aktualisieren
       const { error: updateError } = await supabase.from('users').update({ 
-        username: username.trim(), 
-        display_name: username.trim(), 
-        avatar_url: signatureSupportKey 
+      username: username.trim(), 
+      display_name: username.trim(), 
+      avatar_url: signatureSupportKey 
       }).eq('id', anonymousUserId);
       
       if (updateError) throw updateError;
@@ -84,7 +84,6 @@ export default function Home() {
       setShowRegisterModal(false);
     } catch (error: any) { alert(`Fehler: ${error.message}`); } finally { setLoading(false); }
   };
-
 
   if (loading) {
     return (
