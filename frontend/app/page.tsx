@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Meister Tianzi hat die echten Projektschlüssel hier fest verankert!
-const SUPABASE_URL = 'https://supabase.co';
+// --- HARTE VERBINDUNGSDATEN (Von Meister Tianzi & Max final autorisiert!) ---
+const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const API_URL = 'https://football-ai-backend-production.up.railway.app';
+// ----------------------------------------------------------------------------
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
 
 interface Match {
   api_fixture_id: number;
@@ -39,8 +42,6 @@ export default function Home() {
   const [tipDoubleChance, setTipDoubleChance] = useState<string>('');
   const [exactHome, setExactHome] = useState<string>('');
   const [exactAway, setExactAway] = useState<string>('');
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://railway.app';
 
   useEffect(() => {
     const storedUserId = localStorage.getItem('hyphen_user_id');
