@@ -6,16 +6,16 @@ import { createClient } from '@supabase/supabase-js';
 // --- DEINE UNUMSTÖSSLICHEN VERBINDUNGSDATEN ---
 const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
+const API_URL = 'https://railway.app';
 // ----------------------------------------------------------------------------
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 interface Match {
   api_fixture_id: number;
-  home_team_name: string; // Angepasst an deine echte Tabellen-Struktur!
-  away_team_name: string; // Angepasst an deine echte Tabellen-Struktur!
-  kickoff_time: string;   // Angepasst an deine echte Tabellen-Struktur!
+  home_team_name: string;
+  away_team_name: string;
+  kickoff_time: string;
   league_name: string | null;
   analysis?: { ai_prediction: string; confidence_score: number; };
 }
@@ -61,7 +61,7 @@ export default function Home() {
     if (!username.trim()) return;
     setLoading(true);
     try {
-      // 1. Anonymer Login bei Supabase
+      // 1. Anonymer Login bei Supabase (Erfolgreich!)
       const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
       if (authError) throw authError;
       const anonymousUserId = authData.user!.id;
@@ -70,13 +70,12 @@ export default function Home() {
       const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
       const signatureSupportKey = `Hyphen-${randomCode}`;
       
-      // 3. Zeile in der Tabelle anlegen oder aktualisieren
+      // 3. Zeile in der Tabelle aktualisieren (Email weggelassen, um 400er Validierungsfehler zu umgehen)
       const { error: updateError } = await supabase.from('users').upsert({ 
         id: anonymousUserId,
         username: username.trim(), 
         display_name: username.trim(), 
-        avatar_url: signatureSupportKey,
-        email: "" // Fallback für deine neue Tabellenspalte
+        avatar_url: signatureSupportKey
       });
       
       if (updateError) throw updateError;
