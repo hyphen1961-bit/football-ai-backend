@@ -1,397 +1,142 @@
-import os
-import json
-import httpx
-import random
-import string
-from pathlib import Path
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from supabase import create_client
-from pydantic import BaseModel
-from typing import Optional
-from dotenv import load_dotenv
+'use client';
 
-load_dotenv()
+import { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 
-app = FastAPI(title="Football AI Kumpel-Tipp API")
+// --- HARTE VERBINDUNGSDATEN (Final versiegelt) ---
+const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
+const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
+// -------------------------------------------------
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+export default function Home() {
+  // --- States für den isolierten Test ---
+  const [step, setStep] = useState<1 | 2>(1);
+  const [username, setUsername] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [supportKey, setSupportKey] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+  const handleRegister = async () => {
+    if (!username.trim()) {
+      setError('Bitte gib einen Namen ein.');
+      return;
+    }
 
-api_headers = {
-    "x-rapidapi-key": RAPIDAPI_KEY,
-    "x-rapidapi-host": "v3.football.api-sports.io"
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1. Anonymer Login bei Supabase
+      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
+      if (authError) throw authError;
+      
+      const anonymousUserId = authData.user!.id;
+      setUserId(anonymousUserId);
+
+      // 2. Hyphen-Support-Key generieren
+      const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const signatureSupportKey = `Hyphen-${randomCode}`;
+      setSupportKey(signatureSupportKey);
+
+      // 3. Zeile in der Tabelle anlegen oder aktualisieren
+      const { error: updateError } = await supabase.from('users').upsert({ 
+        id: anonymousUserId,
+        username: username.trim(), 
+        display_name: username.trim(), 
+        avatar_url: signatureSupportKey 
+      });
+      
+      if (updateError) throw updateError;
+
+      // 4. Erfolgreich -> Weiter zu Maske 2
+      setStep(2);
+      
+    } catch (err: any) { 
+      console.error("Registrierungsfehler:", err);
+      setError(`Fehler: ${err.message || 'Unbekannter Fehler'}`); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
+  // --- MASKE 1: Eingabe ---
+  if (step === 1) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="bg-gray-800 border border-purple-500 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <h2 className="text-3xl font-extrabold mb-4 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Hyphen Test-Tool
+          </h2>
+          <p className="text-gray-400 text-center mb-6 text-sm">
+            Schritt 1: Gib deinen Namen ein, um die Supabase-Verbindung und die Key-Generierung zu testen.
+          </p>
+          
+          {error && (
+            <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-4 text-sm">
+              {error}
+            </div>
+          )}
+
+          <input 
+            type="text" 
+            placeholder="Dein Anzeigename" 
+            value={username} 
+            onChange={(e) => setUsername(e.target.value)} 
+            onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+            className="w-full p-4 rounded-xl bg-gray-900 text-white mb-6 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700" 
+          />
+          
+          <button 
+            onClick={handleRegister} 
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-400 font-bold py-4 rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" 
+          >
+            {loading ? 'Verarbeite...' : 'Jetzt testen 🚀'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- MASKE 2: Erfolg & Key-Anzeige ---
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white font-sans flex items-center justify-center p-4">
+      <div className="bg-gray-800 border border-green-500 rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
+        <div className="text-5xl mb-4">✅</div>
+        <h2 className="text-2xl font-bold mb-2 text-green-400">Registrierung erfolgreich!</h2>
+        <p className="text-gray-400 mb-6 text-sm">
+          Die Verbindung zu Supabase steht. Der Name wurde gespeichert und der Key generiert.
+        </p>
+
+        <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-6 rounded-xl shadow-2xl border border-purple-400/30 mb-6">
+          <div className="text-xs opacity-80 mb-1 uppercase tracking-widest">Dein Support-Schlüssel:</div>
+          <div className="text-3xl font-mono font-black tracking-wider mb-2">{supportKey}</div>
+          <div className="text-base font-bold bg-black/20 py-2 px-4 rounded-xl">
+            Gib Hyphen diesen Schlüssel – der Geist im Hintergrund hilft. 👻
+          </div>
+        </div>
+
+        <div className="text-left bg-gray-900 p-4 rounded-lg text-xs font-mono text-gray-400 break-all mb-6">
+          <p><span className="text-purple-400">User ID:</span> {userId}</p>
+          <p><span className="text-purple-400">Name:</span> {username}</p>
+        </div>
+
+        <button 
+          onClick={() => {
+            setStep(1);
+            setUsername('');
+            setUserId(null);
+            setSupportKey(null);
+          }}
+          className="w-full bg-gray-700 hover:bg-gray-600 font-bold py-3 rounded-xl transition-all" 
+        >
+          Test wiederholen
+        </button>
+      </div>
+    </div>
+  );
 }
-
-USE_MOCK_DATA = True
-
-# ============ MODELS ============
-class TipInput(BaseModel):
-    user_id: str  # Die anonyme UUID von Supabase Auth
-    api_fixture_id: int
-    predicted_winner: str
-    tip_over_under: Optional[str] = None
-    tip_btts: Optional[str] = None
-    tip_double_chance: Optional[str] = None
-    tip_exact_score_home: Optional[int] = None
-    tip_exact_score_away: Optional[int] = None
-
-class MatchResultInput(BaseModel):
-    api_fixture_id: int
-    home_score: int
-    away_score: int
-    status: str = "FT"
-
-class RegisterUserInput(BaseModel):
-    user_id: str
-    username: str
-
-# ============ HEALTH CHECK ============
-@app.get("/")
-def read_root():
-    return {"message": "Football AI API is running!", "status": "healthy"}
-
-# ============ FIXTURES ============
-@app.get("/fixtures/next")
-def get_next_fixtures():
-    results = {}
-    try:
-        r1 = httpx.get("https://v3.football.api-sports.io/fixtures?league=78&season=2024&next=5", headers=api_headers, timeout=10.0)
-        results["bundesliga_2024"] = {"status": r1.status_code, "count": len(r1.json().get('response', [])), "data": r1.json().get('response', [])[:2]}
-    except Exception as e:
-        results["bundesliga_2024"] = {"error": str(e)}
-        
-    try:
-        r2 = httpx.get("https://v3.football.api-sports.io/fixtures?league=78&season=2025&next=5", headers=api_headers, timeout=10.0)
-        results["bundesliga_2025"] = {"status": r2.status_code, "count": len(r2.json().get('response', [])), "data": r2.json().get('response', [])[:2]}
-    except Exception as e:
-        results["bundesliga_2025"] = {"error": str(e)}
-    return results
-
-# ============ ANALYSIS ============
-# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
-
-# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
-@app.post("/register-anonymous-user")
-def register_anonymous_user(user: RegisterUserInput):
-    from uuid import UUID
-    try:
-        # Generiere deinen unverkennbaren Hyphen-Schlüssel
-        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        signature_support_key = f"Hyphen-{random_code}"
-        
-        # ID zwingend in eine echte UUID umwandeln für den Fremdschlüssel
-        clean_uuid = UUID(user.user_id)
-        
-        # Wir befüllen die Felder EXAKT so, wie es dein echtes SQL-Schema verlangt:
-        user_data = {
-            "id": str(clean_uuid),
-            "username": user.username.strip(),      # Das eindeutige username-Feld
-            "display_name": user.username.strip(),  # Der Anzeigename für das Frontend
-            "email": f"{user.username.strip()}@anonymous.hyphen", # Platzhalter-E-Mail, um den Trigger zu beruhigen!
-            "role": "user"                         # Standardrolle laut Check-Constraint
-        }
-        
-        # Wir lagern deinen Hyphen-Key im ungenutzten 'avatar_url'-Feld, 
-        # da 'deviation_reason' im echten Schema nicht existiert!
-        user_data["avatar_url"] = signature_support_key
-        
-        # Abspeichern in eurer Tabelle
-        supabase.table('users').upsert(user_data, on_conflict='id').execute()
-        print(f"   ✅ Kumpel {user.username} erfolgreich im echten SQL-Schema registriert!")
-        
-        return {
-            "message": "User erfolgreich im System registriert!",
-            "username": user.username,
-            "support_key": signature_support_key
-        }
-    except Exception as e:
-        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
-
-    from uuid import UUID
-    try:
-        # Generiere deinen unverkennbaren Hyphen-Schlüssel
-        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        signature_support_key = f"Hyphen-{random_code}"
-        
-        # Wir wandeln die ID in eine echte UUID um, damit die Fremdschlüssel-Regel greift!
-        clean_uuid = UUID(user.user_id)
-        
-        # Wir passen die Felder exakt an dein SQL-Schema an:
-        # Wir nutzen 'display_name', um den Hyphen-Key zu speichern, da 'deviation_reason' fehlt!
-        user_data = {
-            "id": str(clean_uuid),
-            "username": user.username,
-            "display_name": signature_support_key
-        }
-        
-        # Sicheres Abspeichern via upsert nach den echten Regeln der DB
-        supabase.table('users').upsert(user_data, on_conflict='id').execute()
-        print(f"   ✅ Kumpel {user.username} erfolgreich im echten SQL-Schema registriert!")
-        
-        return {
-            "message": "User erfolgreich im System registriert!",
-            "username": user.username,
-            "support_key": signature_support_key
-        }
-    except Exception as e:
-        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
-
-# ============ MATCHES MIT ANALYSE ============
-@app.get("/matches")
-async def get_matches():
-    try:
-        # Alle Spiele aus der matches-Tabelle holen
-        matches_response = supabase.table("matches").select("*").execute()
-        matches = matches_response.data or []
-        
-        matches_with_analysis = []
-        
-        # Für jedes Spiel die Analyse aus match_analysis holen
-        for match in matches:
-            fixture_id = match["api_fixture_id"]
-            
-            # Analyse für dieses spezifische Spiel abfragen
-            analysis_response = supabase.table("match_analysis").select("*").eq("api_fixture_id", fixture_id).execute()
-            
-            # Wenn eine Analyse existiert, nimm die erste (sollte nur eine geben)
-            analysis = analysis_response.data[0] if analysis_response.data else None
-            
-            # Hänge die Analyse als Unter-Objekt an das Spiel
-            matches_with_analysis.append({
-                **match,
-                "analysis": analysis
-            })
-        
-        return matches_with_analysis
-        
-    except Exception as e:
-        print(f"Fehler beim Laden der Spiele: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    try:
-        # Alle Spiele aus der matches-Tabelle holen
-        matches_response = supabase.table("matches").select("*").execute()
-        matches = matches_response.data or []
-        
-        matches_with_analysis = []
-        
-        # Für jedes Spiel die Analyse aus match_analysis holen
-        for match in matches:
-            fixture_id = match["api_fixture_id"]
-            
-            # Analyse für dieses spezifische Spiel abfragen
-            analysis_response = supabase.table("match_analysis").select("*").eq("api_fixture_id", fixture_id).execute()
-            
-            # Wenn eine Analyse existiert, nimm die erste (sollte nur eine geben)
-            analysis = analysis_response.data[0] if analysis_response.data else None
-            
-            # Hänge die Analyse als Unter-Objekt an das Spiel
-            matches_with_analysis.append({
-                **match,
-                "analysis": analysis
-            })
-        
-        return matches_with_analysis
-        
-    except Exception as e:
-        print(f"Fehler beim Laden der Spiele: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    try:
-        matches_response = supabase.table("matches").select("*").execute()
-        return matches_response.data or []
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============ TIPS ============
-@app.post("/tips")
-def submit_tip(tip: TipInput):
-    try:
-        tip_data = {
-            "user_id": tip.user_id,
-            "api_fixture_id": tip.api_fixture_id,
-            "predicted_winner": tip.predicted_winner,
-            "tip_over_under": tip.tip_over_under,
-            "tip_btts": tip.tip_btts,
-            "tip_double_chance": tip.tip_double_chance,
-            "tip_exact_score_home": tip.tip_exact_score_home,
-            "tip_exact_score_away": tip.tip_exact_score_away
-        }
-        supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
-        return {"message": "Tipp erfolgreich gespeichert!", "tip": tip_data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
-# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
-# ============ USER ANONYMOUS REGISTRATION & THE HYPHEN KEY ============
-@app.post("/register-anonymous-user")
-def register_anonymous_user(user: RegisterUserInput):
-    import time
-    from uuid import UUID  # <-- Der offizielle Typen-Retter für Supabase!
-    try:
-        # Generiere einen zufälligen 4-stelligen Code aus Zahlen und Großbuchstaben
-        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        
-        # Max' offizielles Markenzeichen: Bindestrich-Verbindung!
-        signature_support_key = f"Hyphen-{random_code}"
-        
-        # Wir wandeln die Text-ID vor dem Abspeichern in eine echte UUID um!
-        clean_uuid = UUID(user.user_id)
-        
-        user_data = {
-            "id": clean_uuid,
-            "username": user.username,
-            "deviation_reason": signature_support_key
-        }
-        
-        # 3 Versuche mit kurzer Pause für das Timing
-        for attempt in range(3):
-            try:
-                supabase.table('users').upsert(user_data, on_conflict='id').execute()
-                print(f"   ✅ User {user.username} erfolgreich bei Supabase registriert (Versuch {attempt + 1})")
-                break
-            except Exception as db_err:
-                if attempt < 2:
-                    print(f"   ⚠️ Timing-Verzögerung bei Supabase. Warte kurz... (Versuch {attempt + 1})")
-                    time.sleep(0.5)
-                else:
-                    raise db_err
-        
-        return {
-            "message": "User erfolgreich im System registriert!",
-            "username": user.username,
-            "support_key": signature_support_key
-        }
-    except Exception as e:
-        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
-
-    import time  # Wichtig für die kleine Pause
-    try:
-        # Generiere einen zufälligen 4-stelligen Code aus Zahlen und Großbuchstaben
-        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        
-        # Max' offizielles Markenzeichen: Bindestrich-Verbindung!
-        signature_support_key = f"Hyphen-{random_code}"
-        
-        user_data = {
-            "id": user.user_id,
-            "username": user.username,
-            "deviation_reason": signature_support_key
-        }
-        
-        # Meister Tianzi schlägt die Timing-Falle: 3 Versuche mit kurzer Pause
-        for attempt in range(3):
-            try:
-                supabase.table('users').upsert(user_data, on_conflict='id').execute()
-                print(f"   ✅ User {user.username} erfolgreich bei Supabase registriert (Versuch {attempt + 1})")
-                break  # Erfolg! Schleife abbrechen
-            except Exception as db_err:
-                if attempt < 2:
-                    print(f"   ⚠️ Timing-Verzögerung bei Supabase. Warte kurz und probiere es erneut... (Versuch {attempt + 1})")
-                    time.sleep(0.5)  # Warte eine halbe Sekunde, bis Supabase die ID im Auth-System freigegeben hat
-                else:
-                    # Wenn alle 3 Versuche fehlschlagen, werfen wir den Fehler
-                    raise db_err
-        
-        return {
-            "message": "User erfolgreich im System registriert!",
-            "username": user.username,
-            "support_key": signature_support_key
-        }
-    except Exception as e:
-        print(f"💥 Fehler bei der Registrierung im Backend: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
-
-    try:
-        # Generiere einen zufälligen 4-stelligen Code aus Zahlen und Großbuchstaben
-        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        
-        # Max' offizielles Markenzeichen: Bindestrich-Verbindung!
-        signature_support_key = f"Hyphen-{random_code}"
-        
-        user_data = {
-            "id": user.user_id,
-            "username": user.username,
-            "deviation_reason": signature_support_key  # Wir nutzen diese Spalte temporär oder dauerhaft für den Key
-        }
-        
-        supabase.table('users').upsert(user_data, on_conflict='id').execute()
-        return {
-            "message": "User erfolgreich im System registriert!",
-            "username": user.username,
-            "support_key": signature_support_key
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-# ============ FIXTURE IMPORTER ============
-@app.get("/fetch-fixtures-from-api")
-def fetch_fixtures_from_api():
-    print("🚀 Starte Import der nächsten Bundesliga-Spiele...")
-    
-    try:
-        # Hole die nächsten 11 Spiele der Bundesliga (Liga 78) für Saison 2026
-        response = httpx.get(
-            "https://v3.football.api-sports.io/fixtures?league=78&season=2026&next=11",
-            headers=api_headers,
-            timeout=15.0
-        )
-        
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=502,
-                detail=f"API-Fehler: Status {response.status_code}"
-            )
-        
-        data = response.json()
-        fixtures = data.get('response', [])
-        
-        if not fixtures:
-            return {"message": "Keine Spiele gefunden!", "count": 0}
-        
-        imported_count = 0
-        
-        # Jedes Spiel in die Supabase-Tabelle 'matches' eintragen
-        for fixture in fixtures:
-            match_data = {
-                "api_fixture_id": fixture['fixture']['id'],
-                "home_team": fixture['teams']['home']['name'],
-                "away_team": fixture['teams']['away']['name'],
-                "date": fixture['fixture']['date']
-            }
-            
-            supabase.table('matches').upsert(
-                match_data, 
-                on_conflict='api_fixture_id'
-            ).execute()
-            
-            imported_count += 1
-            print(f"   ✅ Importiert: {match_data['home_team']} vs {match_data['away_team']}")
-        
-        print(f"🎯 Import abgeschlossen! {imported_count} Spiele gespeichert.")
-        
-        return {
-            "message": f"Erfolgreich {imported_count} Bundesliga-Spiele importiert!",
-            "count": imported_count,
-            "season": 2026,
-            "league": "Bundesliga"
-        }
-        
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="API-Timeout beim Abrufen der Spiele")
-    except Exception as e:
-        print(f"💥 Fehler beim Import: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Import-Fehler: {str(e)}")

@@ -1,151 +1,188 @@
-'use client';
+import os
+import json
+import httpx
+import random
+import string
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from supabase import create_client
+from pydantic import BaseModel
+from typing import Optional
+from dotenv import load_dotenv
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+load_dotenv()
 
-// --- HARTE VERBINDUNGSDATEN (Von Max & Meister Tianzi final versiegelt!) ---
-const SUPABASE_URL = 'https://supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const API_URL = 'https://railway.app';
-// ----------------------------------------------------------------------------
+app = FastAPI(title="Football AI Kumpel-Tipp API")
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-interface Match {
-  api_fixture_id: number;
-  home_team: string;
-  away_team: string;
-  date: string;
-  analysis?: { ai_prediction: string; confidence_score: number; };
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+api_headers = {
+    "x-rapidapi-key": RAPIDAPI_KEY,
+    "x-rapidapi-host": "v3.football.api-sports.io"
 }
 
-export default function Home() {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [username, setUsername] = useState('');
-  const [supportKey, setSupportKey] = useState<string | null>(null);
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
+USE_MOCK_DATA = True
 
-  useEffect(() => {
-    async function checkSession() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUserId(session.user.id);
-          const { data } = await supabase.from('users').select('username, display_name, avatar_url').eq('id', session.user.id).single();
-          if (data) {
-            setUsername(data.display_name || data.username || 'Kumpel');
-            setSupportKey(data.avatar_url || 'Hyphen-KEY');
-          } else { setShowRegisterModal(true); }
-        } else { setShowRegisterModal(true); }
-      } catch (err) { console.error(err); } finally { loadMatches(); }
-    }
-    checkSession();
-  }, []);
+# ============ MODELS ============
+class TipInput(BaseModel):
+    user_id: str
+    api_fixture_id: int
+    predicted_winner: str
+    tip_over_under: Optional[str] = None
+    tip_btts: Optional[str] = None
+    tip_double_chance: Optional[str] = None
+    tip_exact_score_home: Optional[int] = None
+    tip_exact_score_away: Optional[int] = None
 
-  const loadMatches = async () => {
-    try {
-      // Fragt jetzt den direkten Endpunkt ohne das /api-Präfix ab, um den 404 zu umgehen
-      const res = await fetch(`${API_URL}/matches`);
-      const data = await res.json();
-      setMatches(Array.isArray(data) ? data : []);
-    } catch (error) { 
-      console.error(error); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
+class MatchResultInput(BaseModel):
+    api_fixture_id: int
+    home_score: int
+    away_score: int
+    status: str = "FT"
 
-  const handleRegister = async () => {
-    if (!username.trim()) return;
-    setLoading(true);
-    try {
-      // 1. Anonymer Login bei Supabase
-      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-      if (authError) throw authError;
-      const anonymousUserId = authData.user!.id;
-      
-      // 2. Hyphen-Support-Key generieren
-      const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const signatureSupportKey = `Hyphen-${randomCode}`;
-      
-      // 3. Zeile in der Tabelle anlegen oder aktualisieren
-      const { error: updateError } = await supabase.from('users').upsert({ 
-        id: anonymousUserId,
-        username: username.trim(), 
-        display_name: username.trim(), 
-        avatar_url: signatureSupportKey 
-      });
-      
-      if (updateError) throw updateError;
-      setUserId(anonymousUserId);
-      setSupportKey(signatureSupportKey);
-      localStorage.setItem('hyphen_user_id', anonymousUserId);
-      localStorage.setItem('hyphen_support_key', signatureSupportKey);
-      setShowRegisterModal(false);
-    } catch (error: any) { 
-      alert(`Fehler bei der Registrierung: ${error.message}`); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
+class RegisterUserInput(BaseModel):
+    user_id: str
+    username: str
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-white text-2xl font-bold animate-pulse">Meister Tianzi ordnet die Fussball-Kette...</div>
-      </div>
-    );
-  }
+# ============ HEALTH CHECK ============
+@app.get("/")
+def read_root():
+    return {"message": "Football AI API is running!", "status": "healthy"}
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white font-sans pb-12">
-      {showRegisterModal && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-gray-800 border border-purple-500 rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <h2 className="text-3xl font-extrabold mb-4 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Hyphen Kumpel-Tipp</h2>
-            <input type="text" placeholder="Dein Anzeigename" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 rounded-xl bg-gray-900 text-white mb-6 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700" />
-            <button onClick={handleRegister} className="w-full bg-gradient-to-r from-purple-600 to-pink-400 font-bold py-4 rounded-xl transition-all shadow-lg">Jetzt starten 🚀</button>
-          </div>
-        </div>
-      )}
-      {supportKey && (
-        <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-6 text-center shadow-2xl border-b border-purple-400/30">
-          <div className="text-xs opacity-80 mb-1 uppercase tracking-widest">Dein Support-Schlüssel:</div>
-          <div className="text-3xl font-mono font-black tracking-wider mb-2">{supportKey}</div>
-          <div className="text-base font-bold bg-black/20 max-w-xl mx-auto py-2 px-4 rounded-xl">Gib Hyphen diesen Schlüssel – der Geist im Hintergrund hilft. 👻</div>
-        </div>
-      )}
+# ============ FIXTURES ============
+@app.get("/fixtures/next")
+def get_next_fixtures():
+    results = {}
+    try:
+        r1 = httpx.get("https://v3.football.api-sports.io/fixtures?league=78&season=2024&next=5", headers=api_headers, timeout=10.0)
+        results["bundesliga_2024"] = {"status": r1.status_code, "count": len(r1.json().get('response', [])), "data": r1.json().get('response', [])[:2]}
+    except Exception as e:
+        results["bundesliga_2024"] = {"error": str(e)}
+    
+    try:
+        r2 = httpx.get("https://v3.football.api-sports.io/fixtures?league=78&season=2025&next=5", headers=api_headers, timeout=10.0)
+        results["bundesliga_2025"] = {"status": r2.status_code, "count": len(r2.json().get('response', [])), "data": r2.json().get('response', [])[:2]}
+    except Exception as e:
+        results["bundesliga_2025"] = {"error": str(e)}
+        
+    return results
 
-      <div className="container mx-auto px-4 py-10 max-w-6xl">
-        <h1 className="text-4xl font-black text-center mb-12 uppercase tracking-wide bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">🏟️ Spielplan & Vorhersagen 🏟️</h1>
-        {matches.length === 0 ? (
-          <div className="text-center text-slate-400 py-12 bg-gray-800/50 rounded-xl border border-gray-700">
-            Keine aktiven Spiele geladen. Der Railway-Server läuft, liefert aber noch keine Spieldaten.
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {matches.map((match) => (
-              <div key={match.api_fixture_id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl hover:border-purple-500/50 transition-all duration-300 flex flex-col justify-between">
-                <div>
-                  <div className="text-xs font-mono text-slate-400 mb-2">{new Date(match.date).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-                  <div className="text-lg font-bold mb-4">{match.home_team} <span className="text-purple-400">vs</span> {match.away_team}</div>
-                  {match.analysis ? (
-                    <div className="mb-6 p-3 bg-slate-900 border border-purple-900/40 rounded-lg">
-                      <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">KI-Prognose:</span>
-                      <div className="text-base font-black text-purple-400 mt-0.5">{match.analysis.ai_prediction} ({match.analysis.confidence_score}%)</div>
-                    </div>
-                  ) : (
-                    <div className="mb-6 p-3 bg-slate-900/50 text-xs text-slate-500 rounded-lg italic">Keine KI-Analyse für diese Partie hinterlegt.</div>
-                  )}
-                </div>
-                <button className="w-full bg-slate-700 hover:bg-purple-600 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">Spiel aktiv ⚽</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+# ============ REGISTRATION (EINZIGARTIG & SAUBER) ============
+@app.post("/register-anonymous-user")
+def register_anonymous_user(user: RegisterUserInput):
+    try:
+        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        signature_support_key = f"Hyphen-{random_code}"
+        
+        user_data = {
+            "id": user.user_id,
+            "username": user.username.strip(),
+            "display_name": user.username.strip(),
+            "avatar_url": signature_support_key
+        }
+        
+        supabase.table('users').upsert(user_data, on_conflict='id').execute()
+        print(f"✅ Kumpel {user.username} erfolgreich registriert mit Key: {signature_support_key}")
+        
+        return {
+            "message": "User erfolgreich im System registriert!",
+            "username": user.username,
+            "support_key": signature_support_key
+        }
+    except Exception as e:
+        print(f"💥 Fehler bei der Registrierung: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
+# ============ MATCHES MIT ANALYSE ============
+@app.get("/matches")
+async def get_matches():
+    try:
+        matches_response = supabase.table("matches").select("*").execute()
+        matches = matches_response.data or []
+        
+        matches_with_analysis = []
+        for match in matches:
+            fixture_id = match["api_fixture_id"]
+            analysis_response = supabase.table("match_analysis").select("*").eq("api_fixture_id", fixture_id).execute()
+            analysis = analysis_response.data[0] if analysis_response.data else None
+            
+            matches_with_analysis.append({
+                **match,
+                "analysis": analysis
+            })
+            
+        return matches_with_analysis
+    except Exception as e:
+        print(f"Fehler beim Laden der Spiele: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============ TIPS ============
+@app.post("/tips")
+def submit_tip(tip: TipInput):
+    try:
+        tip_data = {
+            "user_id": tip.user_id,
+            "api_fixture_id": tip.api_fixture_id,
+            "predicted_winner": tip.predicted_winner,
+            "tip_over_under": tip.tip_over_under,
+            "tip_btts": tip.tip_btts,
+            "tip_double_chance": tip.tip_double_chance,
+            "tip_exact_score_home": tip.tip_exact_score_home,
+            "tip_exact_score_away": tip.tip_exact_score_away
+        }
+        supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
+        return {"message": "Tipp erfolgreich gespeichert!", "tip": tip_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============ FIXTURE IMPORTER ============
+@app.get("/fetch-fixtures-from-api")
+def fetch_fixtures_from_api():
+    print("🚀 Starte Import der nächsten Bundesliga-Spiele...")
+    try:
+        response = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=78&season=2026&next=11",
+            headers=api_headers,
+            timeout=15.0
+        )
+        if response.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"API-Fehler: Status {response.status_code}")
+        
+        data = response.json()
+        fixtures = data.get('response', [])
+        
+        if not fixtures:
+            return {"message": "Keine Spiele gefunden!", "count": 0}
+        
+        imported_count = 0
+        for fixture in fixtures:
+            match_data = {
+                "api_fixture_id": fixture['fixture']['id'],
+                "home_team": fixture['teams']['home']['name'],
+                "away_team": fixture['teams']['away']['name'],
+                "date": fixture['fixture']['date']
+            }
+            supabase.table('matches').upsert(match_data, on_conflict='api_fixture_id').execute()
+            imported_count += 1
+            
+        print(f"🎯 Import abgeschlossen! {imported_count} Spiele gespeichert.")
+        return {"message": f"Erfolgreich {imported_count} Spiele importiert!", "count": imported_count}
+        
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="API-Timeout")
+    except Exception as e:
+        print(f"💥 Fehler beim Import: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import-Fehler: {str(e)}")
