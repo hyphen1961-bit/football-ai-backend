@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 // --- DEINE UNUMSTÖSSLICHEN VERBINDUNGSDATEN ---
 const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
-const API_URL = 'https://railway.app';
+const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
 // ----------------------------------------------------------------------------
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -58,38 +58,42 @@ export default function Home() {
   };
 
   const handleRegister = async () => {
-    if (!username.trim()) return;
-    setLoading(true);
-    try {
-      // 1. Anonymer Login bei Supabase (Erfolgreich!)
+  if (!username.trim()) return;
+  setLoading(true);
+  try {
+    // Nur neu anmelden, wenn noch keine Session besteht
+    let anonymousUserId = userId;
+
+    if (!anonymousUserId) {
       const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
       if (authError) throw authError;
-      const anonymousUserId = authData.user!.id;
-      
-      // 2. Hyphen-Support-Key generieren
-      const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const signatureSupportKey = `Hyphen-${randomCode}`;
-      
-      // 3. Zeile in der Tabelle aktualisieren (Email weggelassen, um 400er Validierungsfehler zu umgehen)
-      const { error: updateError } = await supabase.from('users').upsert({ 
-        id: anonymousUserId,
-        username: username.trim(), 
-        display_name: username.trim(), 
-        avatar_url: signatureSupportKey
-      });
-      
-      if (updateError) throw updateError;
-      setUserId(anonymousUserId);
-      setSupportKey(signatureSupportKey);
-      localStorage.setItem('hyphen_user_id', anonymousUserId);
-      localStorage.setItem('hyphen_support_key', signatureSupportKey);
-      setShowRegisterModal(false);
-    } catch (error: any) { 
-      alert(`Fehler bei der Registrierung: ${error.message}`); 
-    } finally { 
-      setLoading(false); 
+      anonymousUserId = authData.user!.id;
     }
-  };
+
+    // Hyphen-Support-Key generieren
+    const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const signatureSupportKey = `Hyphen-${randomCode}`;
+
+    // Zeile in der Tabelle anlegen/aktualisieren
+    const { error: updateError } = await supabase.from('users').upsert({
+      id: anonymousUserId,
+      username: username.trim(),
+      display_name: username.trim(),
+      avatar_url: signatureSupportKey
+    });
+
+    if (updateError) throw updateError;
+    setUserId(anonymousUserId);
+    setSupportKey(signatureSupportKey);
+    localStorage.setItem('hyphen_user_id', anonymousUserId);
+    localStorage.setItem('hyphen_support_key', signatureSupportKey);
+    setShowRegisterModal(false);
+  } catch (error: any) {
+    alert(`Fehler bei der Registrierung: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+    };
 
   if (loading) {
     return (
