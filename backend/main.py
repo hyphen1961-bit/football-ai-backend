@@ -5,13 +5,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from pydantic import BaseModel
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI(title="Football AI Kumpel-Tipp API")
 
-# WICHTIG: Dies erlaubt deinem Vercel-Frontend den Zugriff!
+# CORS erlauben, damit Vercel mit Railway sprechen darf
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,20 +23,42 @@ app.add_middleware(
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+api_headers = {
+    "x-rapidapi-key": RAPIDAPI_KEY,
+    "x-rapidapi-host": "v3.football.api-sports.io"
+}
 
 # ============ MODELS ============
 class RegisterUserInput(BaseModel):
     user_id: str
     username: str
 
+class TipInput(BaseModel):
+    user_id: str
+    api_fixture_id: int
+    predicted_winner: str
+    tip_over_under: Optional[str] = None
+    tip_btts: Optional[str] = None
+    tip_double_chance: Optional[str] = None
+    tip_exact_score_home: Optional[int] = None
+    tip_exact_score_away: Optional[int] = None
+
+class MatchResultInput(BaseModel):
+    api_fixture_id: int
+    home_score: int
+    away_score: int
+    status: str = "FT"
+
 # ============ HEALTH CHECK ============
 @app.get("/")
 def read_root():
-    return {"message": "Backend is running!", "status": "healthy"}
+    return {"message": "Football AI API is running!", "status": "healthy"}
 
-# ============ ISOLIERTER REGISTRIERUNGS-ENDPOINT ============
+# ============ REGISTRIERUNG (NUR EINMAL, SAUBER) ============
 @app.post("/register-anonymous-user")
 def register_anonymous_user(user: RegisterUserInput):
     try:
@@ -51,7 +74,7 @@ def register_anonymous_user(user: RegisterUserInput):
             "avatar_url": signature_support_key
         }
         
-        # 3. In Supabase speichern (upsert verhindert Duplikate)
+        # 3. In Supabase speichern (RLS ist aus, daher kein Block)
         supabase.table('users').upsert(user_data, on_conflict='id').execute()
         
         print(f"✅ Kumpel {user.username} erfolgreich registriert mit Key: {signature_support_key}")
@@ -64,3 +87,84 @@ def register_anonymous_user(user: RegisterUserInput):
     except Exception as e:
         print(f"💥 Registrierungs-Fehler: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
+# ============ MATCHES MIT ANALYSE ============
+@app.get("/matches")
+async def get_matches():
+    try:
+        matches_response = supabase.table("matches").select("*").execute()
+        matches = matches_response.data or []
+        
+        matches_with_analysis = []
+        for match in matches:
+            fixture_id = match["api_fixture_id"]
+            analysis_response = supabase.table("match_analysis").select("*").eq("api_fixture_id", fixture_id).execute()
+            analysis = analysis_response.data[0] if analysis_response.data else None
+            
+            matches_with_analysis.append({
+                **match,
+                "analysis": analysis
+            })
+            
+        return matches_with_analysis
+    except Exception as e:
+        print(f"Fehler beim Laden der Spiele: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============ TIPS ============
+@app.post("/tips")
+def submit_tip(tip: TipInput):
+    try:
+        tip_data = {
+            "user_id": tip.user_id,
+            "api_fixture_id": tip.api_fixture_id,
+            "predicted_winner": tip.predicted_winner,
+            "tip_over_under": tip.tip_over_under,
+            "tip_btts": tip.tip_btts,
+            "tip_double_chance": tip.tip_double_chance,
+            "tip_exact_score_home": tip.tip_exact_score_home,
+            "tip_exact_score_away": tip.tip_exact_score_away
+        }
+        supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
+        return {"message": "Tipp erfolgreich gespeichert!", "tip": tip_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============ FIXTURE IMPORTER ============
+@app.get("/fetch-fixtures-from-api")
+def fetch_fixtures_from_api():
+    print("🚀 Starte Import der nächsten Bundesliga-Spiele...")
+    try:
+        response = os # Dummy to prevent unused import warning if we simplify, but let's keep httpx
+        import httpx
+        res = httpx.get(
+            "https://v3.football.api-sports.io/fixtures?league=78&season=2026&next=11",
+            headers=api_headers,
+            timeout=15.0
+        )
+        if res.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"API-Fehler: Status {res.status_code}")
+        
+        data = res.json()
+        fixtures = data.get('response', [])
+        
+        if not fixtures:
+            return {"message": "Keine Spiele gefunden!", "count": 0}
+        
+        imported_count = 0
+        for fixture in fixtures:
+            match_data = {
+                "api_fixture_id": fixture['fixture']['id'],
+                "home_team": fixture['teams']['home']['name'],
+                "away_team": fixture['teams']['away']['name'],
+                "date": fixture['fixture']['date']
+            }
+            supabase.table('matches').upsert(match_data, on_conflict='api_fixture_id').execute()
+            imported_count += 1
+            
+        print(f"🎯 Import abgeschlossen! {imported_count} Spiele gespeichert.")
+        return {"message": f"Erfolgreich {imported_count} Spiele importiert!", "count": imported_count}
+        
+    except Exception as e:
+        print(f"💥 Fehler beim Import: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import-Fehler: {str(e)}")
