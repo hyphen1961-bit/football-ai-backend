@@ -5,10 +5,10 @@ from supabase import create_client, Client
 
 app = FastAPI(title="Football AI Backend")
 
-# --- CORS KONFIGURATION (Erlaubt deiner echten Vercel-App sicheren Zugriff) ---
+# --- CORS REPARATUR (Erlaubt Vercel den uneingeschränkten Datenabruf) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://vercel.app", "http://localhost:3000"],
+    allow_origins=["https://football-ai-backend.vercel.app", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

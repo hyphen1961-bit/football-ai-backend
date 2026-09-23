@@ -13,9 +13,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 interface Match {
   api_fixture_id: number;
-  home_team: string;
-  away_team: string;
-  date: string;
+  home_team_name: string; // Angepasst an deine echte Tabellen-Struktur!
+  away_team_name: string; // Angepasst an deine echte Tabellen-Struktur!
+  kickoff_time: string;   // Angepasst an deine echte Tabellen-Struktur!
+  league_name: string | null;
   analysis?: { ai_prediction: string; confidence_score: number; };
 }
 
@@ -46,7 +47,6 @@ export default function Home() {
 
   const loadMatches = async () => {
     try {
-      // Greift exakt auf deine oben definierte, lange API_URL zu
       const res = await fetch(`${API_URL}/matches`);
       const data = await res.json();
       setMatches(Array.isArray(data) ? data : []);
@@ -76,7 +76,7 @@ export default function Home() {
         username: username.trim(), 
         display_name: username.trim(), 
         avatar_url: signatureSupportKey,
-        email: null
+        email: "" // Fallback für deine neue Tabellenspalte
       });
       
       if (updateError) throw updateError;
@@ -130,8 +130,10 @@ export default function Home() {
             {matches.map((match) => (
               <div key={match.api_fixture_id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-xl hover:border-purple-500/50 transition-all duration-300 flex flex-col justify-between">
                 <div>
-                  <div className="text-xs font-mono text-slate-400 mb-2">{new Date(match.date).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-                  <div className="text-lg font-bold mb-4">{match.home_team} <span className="text-purple-400">vs</span> {match.away_team}</div>
+                  <div className="text-xs font-mono text-slate-400 mb-2">
+                    {match.league_name || 'Liga'} • {new Date(match.kickoff_time).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="text-lg font-bold mb-4">{match.home_team_name} <span className="text-purple-400">vs</span> {match.away_team_name}</div>
                   {match.analysis ? (
                     <div className="mb-6 p-3 bg-slate-900 border border-purple-900/40 rounded-lg">
                       <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">KI-Prognose:</span>
