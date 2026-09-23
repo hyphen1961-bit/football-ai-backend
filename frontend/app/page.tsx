@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// --- HARTE VERBINDUNGSDATEN (Final versiegelt) ---
+// --- HARTE VERBINDUNGSDATEN (Final versiegelt von Max!) ---
 const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
 const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
-// -------------------------------------------------
+// ----------------------------------------------------------
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -94,7 +94,7 @@ export default function Home() {
             disabled={loading}
             className="w-full bg-gradient-to-r from-purple-600 to-pink-400 font-bold py-4 rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" 
           >
-            {loading ? 'Verarbeite...' : 'Jetzt testen 🚀'}
+            {loading ? 'Verarbeite...' : 'Jetzt testen '}
           </button>
         </div>
       </div>

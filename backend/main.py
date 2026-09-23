@@ -58,7 +58,7 @@ class MatchResultInput(BaseModel):
 def read_root():
     return {"message": "Football AI API is running!", "status": "healthy"}
 
-# ============ REGISTRIERUNG (NUR EINMAL, SAUBER) ============
+# ============ REGISTRIERUNG (EINZIGARTIG & SAUBER) ============
 @app.post("/register-anonymous-user")
 def register_anonymous_user(user: RegisterUserInput):
     try:
@@ -85,7 +85,7 @@ def register_anonymous_user(user: RegisterUserInput):
             "support_key": signature_support_key
         }
     except Exception as e:
-        print(f"💥 Registrierungs-Fehler: {str(e)}")
+        print(f" Registrierungs-Fehler: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
 
 # ============ MATCHES MIT ANALYSE ============
@@ -129,42 +129,3 @@ def submit_tip(tip: TipInput):
         return {"message": "Tipp erfolgreich gespeichert!", "tip": tip_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# ============ FIXTURE IMPORTER ============
-@app.get("/fetch-fixtures-from-api")
-def fetch_fixtures_from_api():
-    print("🚀 Starte Import der nächsten Bundesliga-Spiele...")
-    try:
-        response = os # Dummy to prevent unused import warning if we simplify, but let's keep httpx
-        import httpx
-        res = httpx.get(
-            "https://v3.football.api-sports.io/fixtures?league=78&season=2026&next=11",
-            headers=api_headers,
-            timeout=15.0
-        )
-        if res.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"API-Fehler: Status {res.status_code}")
-        
-        data = res.json()
-        fixtures = data.get('response', [])
-        
-        if not fixtures:
-            return {"message": "Keine Spiele gefunden!", "count": 0}
-        
-        imported_count = 0
-        for fixture in fixtures:
-            match_data = {
-                "api_fixture_id": fixture['fixture']['id'],
-                "home_team": fixture['teams']['home']['name'],
-                "away_team": fixture['teams']['away']['name'],
-                "date": fixture['fixture']['date']
-            }
-            supabase.table('matches').upsert(match_data, on_conflict='api_fixture_id').execute()
-            imported_count += 1
-            
-        print(f"🎯 Import abgeschlossen! {imported_count} Spiele gespeichert.")
-        return {"message": f"Erfolgreich {imported_count} Spiele importiert!", "count": imported_count}
-        
-    except Exception as e:
-        print(f"💥 Fehler beim Import: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Import-Fehler: {str(e)}")
