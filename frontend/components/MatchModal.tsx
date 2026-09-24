@@ -76,14 +76,16 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     setDeviationReason('');
 
     if (!isFinished && match.api_fixture_id && kumpel) {
-      setIsLoadingTip(true);
-      supabase
-        .from('user_tips')
-        .select('predicted_winner, tip_over_under, tip_btts, tip_double_chance, tip_exact_score_home, tip_exact_score_away')
-        .eq('user_id', kumpel.id)
-        .eq('api_fixture_id', match.api_fixture_id)
-        .maybeSingle()
-        .then(({ data, error }) => {
+      const loadExistingTip = async () => {
+        setIsLoadingTip(true);
+        try {
+          const { data, error } = await supabase
+            .from('user_tips')
+            .select('predicted_winner, tip_over_under, tip_btts, tip_double_chance, tip_exact_score_home, tip_exact_score_away')
+            .eq('user_id', kumpel.id)
+            .eq('api_fixture_id', match.api_fixture_id)
+            .maybeSingle();
+
           if (error) {
             console.error('Fehler beim Laden des Tipps:', error.message);
             return;
@@ -96,8 +98,12 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             setTipExactHome(data.tip_exact_score_home?.toString() || '');
             setTipExactAway(data.tip_exact_score_away?.toString() || '');
           }
-        })
-        .finally(() => setIsLoadingTip(false));
+        } finally {
+          setIsLoadingTip(false);
+        }
+      };
+
+      loadExistingTip();
     }
   }, [match, isFinished, kumpel]);
 
