@@ -1,20 +1,22 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { Match, getConfidenceColor, getConfidenceLabel, getLeagueName } from '@/types';
+import { supabase } from '@/lib/supabaseClient';
+import { useKumpel } from '@/contexts/KumpelProvider';
 
 interface MatchModalProps {
   match: Match | null;
   onClose: () => void;
 }
 
-const BACKEND_URL = 'https://football-ai-backend-production-0f95.up.railway.app';
-
 export default function MatchModal({ match, onClose }: MatchModalProps) {
+  const { kumpel } = useKumpel();
+
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isFinished, setIsFinished] = useState<boolean>(false);
   const [isLoadingTip, setIsLoadingTip] = useState<boolean>(false);
-  
+
   const [tip1X2, setTip1X2] = useState<string>('');
   const [tipOverUnder, setTipOverUnder] = useState<string>('');
   const [tipBTTS, setTipBTTS] = useState<string>('');
@@ -29,7 +31,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   const confidence = match.analysis?.confidence_score || 0;
   const colorClass = getConfidenceColor(confidence);
   const leagueName = getLeagueName(match.league_id, match.league_name);
-  
+
   const kickoffTime = useMemo(() => new Date(match.kickoff_time), [match.kickoff_time]);
   const time = kickoffTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const date = kickoffTime.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -73,14 +75,19 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
     setTipExactAway('');
     setDeviationReason('');
 
-    if (!isFinished && match.api_fixture_id) {
+    if (!isFinished && match.api_fixture_id && kumpel) {
       setIsLoadingTip(true);
-      fetch(`${BACKEND_URL}/tips/Urs/${match.api_fixture_id}`)
-        .then(res => {
-          if (res.ok) return res.json();
-          return null;
-        })
-        .then(data => {
+      supabase
+        .from('user_tips')
+        .select('predicted_winner, tip_over_under, tip_btts, tip_double_chance, tip_exact_score_home, tip_exact_score_away')
+        .eq('user_id', kumpel.id)
+        .eq('api_fixture_id', match.api_fixture_id)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Fehler beim Laden des Tipps:', error.message);
+            return;
+          }
           if (data) {
             setTip1X2(data.predicted_winner || '');
             setTipOverUnder(data.tip_over_under || '');
@@ -90,10 +97,9 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             setTipExactAway(data.tip_exact_score_away?.toString() || '');
           }
         })
-        .catch(err => console.error("Fehler beim Laden des Tipps:", err))
         .finally(() => setIsLoadingTip(false));
     }
-  }, [match, isFinished]);
+  }, [match, isFinished, kumpel]);
 
   const aiPrediction = (match.analysis?.ai_prediction || '').toLowerCase();
   const isDeviating = tip1X2 !== '' && (
@@ -114,32 +120,35 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
       return;
     }
 
+    if (!kumpel) {
+      alert('Dein Profil wird noch geladen, bitte kurz warten und erneut versuchen.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const tipData = {
-        username: 'Urs',
-        api_fixture_id: match.api_fixture_id,
-        predicted_winner: tip1X2,
-        tip_over_under: tipOverUnder || null,
-        tip_btts: tipBTTS || null,
-        tip_double_chance: tipDoubleChance || null,
-        tip_exact_score_home: tipExactHome ? parseInt(tipExactHome) : null,
-        tip_exact_score_away: tipExactAway ? parseInt(tipExactAway) : null,
-        deviation_reason: deviationReason || null,
-      };
+      const { error } = await supabase
+        .from('user_tips')
+        .upsert(
+          {
+            user_id: kumpel.id,
+            api_fixture_id: match.api_fixture_id,
+            predicted_winner: tip1X2,
+            tip_over_under: tipOverUnder || null,
+            tip_btts: tipBTTS || null,
+            tip_double_chance: tipDoubleChance || null,
+            tip_exact_score_home: tipExactHome ? parseInt(tipExactHome) : null,
+            tip_exact_score_away: tipExactAway ? parseInt(tipExactAway) : null,
+            deviation_reason: deviationReason || null,
+          },
+          { onConflict: 'user_id,api_fixture_id' }
+        );
 
-      const res = await fetch(`${BACKEND_URL}/tips`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tipData),
-      });
-
-      if (res.ok) {
+      if (!error) {
         alert('Tipp gespeichert/aktualisiert!');
         onClose();
       } else {
-        const err = await res.text();
-        alert('Fehler: ' + err);
+        alert('Fehler: ' + error.message);
       }
     } catch (error) {
       alert('Fehler beim Speichern');
@@ -151,7 +160,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        
+
         <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-6 flex justify-between items-start z-10">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -164,7 +173,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
         </div>
 
         <div className="p-6 space-y-6">
-          
+
           <div className="flex justify-between items-center">
             <div className={`px-6 py-3 rounded-full text-lg font-bold border ${colorClass}`}>
               {confidence}% - {getConfidenceLabel(confidence)}
@@ -241,10 +250,11 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
           {!isFinished && !isLocked && (
             <div className="border-t border-slate-800 pt-6">
               <h3 className="text-lg font-bold text-white mb-4">
-                Dein Tipp {isLoadingTip && <span className="text-sm text-slate-400 font-normal">(Lade bestehenden Tipp...)</span>}
+                Dein Tipp {kumpel && <span className="text-sm text-slate-400 font-normal">({kumpel.username})</span>}{' '}
+                {isLoadingTip && <span className="text-sm text-slate-400 font-normal">(Lade bestehenden Tipp...)</span>}
               </h3>
               <div className="space-y-6">
-                
+
                 <div>
                   <label className="text-sm font-semibold text-slate-400 uppercase block mb-3">1X2 - Wer gewinnt?</label>
                   <div className="grid grid-cols-3 gap-3">
@@ -315,7 +325,7 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
                 <button type="button" onClick={handleSubmit} disabled={isSubmitting || !tip1X2} className={`w-full font-bold py-4 rounded-lg text-lg transition-all ${isSubmitting || !tip1X2 ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/50'}`}>
                   {isSubmitting ? 'Speichern...' : 'Tipp speichern / aktualisieren'}
                 </button>
-                
+
                 {!tip1X2 && (
                   <p className="text-center text-sm text-slate-400">Wähle zuerst einen 1X2-Tipp (1, 0 oder 2)</p>
                 )}
