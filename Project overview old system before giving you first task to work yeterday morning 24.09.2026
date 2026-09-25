@@ -1,0 +1,391 @@
+================================================================================
+PROJEKT-DOKUMENTATION: FOOTBALL AI KUMPEL-TIPP
+Stand: 24. September 2026
+================================================================================
+
+1. PROJEKTIDEE & ZIEL
+--------------------------------------------------------------------------------
+Wir bauen eine private, gamifizierte Tipp-Liga für Freunde. 
+- Anonyme Registrierung ohne E-Mail-Pflicht.
+- Persönlicher "Hyphen-Schlüssel" (Hyphen-XXXX) als Markenzeichen.
+- KI-gestützte Spielanalyse (Form, Verletzungen, Head-to-Head, Quoten).
+- Mehrere Tipp-Varianten: 1X2, Over/Under 2.5, BTTS, Doppelte Chance, exaktes Ergebnis.
+- Automatisches Scoring-System bei Ergebnis-Eintragung.
+- Rangliste der besten Tipper.
+
+Tech-Stack:
+- Frontend: Next.js (App Router) auf Vercel
+- Backend: FastAPI (Python) auf Railway
+- Datenbank: Supabase (PostgreSQL)
+- Externe API: API-Sports (v3.football.api-sports.io)
+
+
+2. AKTUELLER STATUS
+--------------------------------------------------------------------------------
+INFRASTRUKTUR:
+- Backend auf Railway deployed und grün.
+- Frontend auf Vercel deployed und grün.
+- Supabase-Projekt aktiv und verbunden.
+- Anonymous Authentication aktiviert.
+- Site URL in Supabase auf Vercel-Domain gesetzt.
+- RLS (Row Level Security) deaktiviert für die Testphase.
+- Spalten email, raw_user_meta_data, created_at zur users-Tabelle hinzugefügt.
+
+FRONTEND:
+- Isoliertes Test-Tool implementiert (Maske 1: Name eingeben -> Maske 2: Erfolg & Hyphen-Key).
+- Supabase Client initialisiert.
+- Anonyme Anmeldung via signInAnonymously() funktioniert.
+- Korrekte, versiegelte URLs hinterlegt.
+
+BACKEND:
+- CORS aktiviert für alle Origins.
+- Registrierungs-Endpoint sauber implementiert.
+- Matches-Endpoint mit Analyse-Verknüpfung.
+- Tips-Endpoint mit user_id (UUID).
+- Mock-Daten-Modus (USE_MOCK_DATA = True) verfügbar.
+
+OFFEN / NÄCHSTE SCHRITTE:
+- Validierung, dass Registrierung von Maske 1 zu Maske 2 fehlerfrei läuft.
+- Wiedereinbau der Spiel-Anzeige (/matches).
+- Tipp-Modal mit allen Varianten.
+- Scoring-Integration bei Ergebnis-Eintragung.
+- Ranking-Seite.
+
+
+3. VERSIEGELTE VERBINDUNGSDATEN
+--------------------------------------------------------------------------------
+SUPABASE_URL:
+https://knjgiaphysdgxenritzh.supabase.co
+
+SUPABASE_ANON_KEY:
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs
+
+API_URL (Railway Backend):
+https://football-ai-backend-production-a405.up.railway.app
+
+Vercel Frontend:
+https://football-ai-backend.vercel.app
+
+Supabase Projekt-ID:
+knjgiaphysdgxenritzh
+
+Supabase Account (Admin):
+E-Mail: hyphen1961@gmail.com
+UID: 9432326d-7715-46f7-9524-2db74db1209a
+
+Backend Environment Variables (Railway):
+- SUPABASE_URL: https://knjgiaphysdgxenritzh.supabase.co
+- SUPABASE_KEY: (Service Role Key - im Dashboard unter Settings > API)
+- RAPIDAPI_KEY: (API-Sports Key - im RapidAPI Dashboard)
+
+
+4. AKTUELLE main.py (BACKEND - SAUBERE VERSION)
+--------------------------------------------------------------------------------
+
+import os
+import random
+import string
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from supabase import create_client
+from pydantic import BaseModel
+from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = FastAPI(title="Football AI Kumpel-Tipp API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+api_headers = {
+    "x-rapidapi-key": RAPIDAPI_KEY,
+    "x-rapidapi-host": "v3.football.api-sports.io"
+}
+
+# ============ MODELS ============
+class RegisterUserInput(BaseModel):
+    user_id: str
+    username: str
+
+class TipInput(BaseModel):
+    user_id: str
+    api_fixture_id: int
+    predicted_winner: str
+    tip_over_under: Optional[str] = None
+    tip_btts: Optional[str] = None
+    tip_double_chance: Optional[str] = None
+    tip_exact_score_home: Optional[int] = None
+    tip_exact_score_away: Optional[int] = None
+
+class MatchResultInput(BaseModel):
+    api_fixture_id: int
+    home_score: int
+    away_score: int
+    status: str = "FT"
+
+# ============ HEALTH CHECK ============
+@app.get("/")
+def read_root():
+    return {"message": "Football AI API is running!", "status": "healthy"}
+
+# ============ REGISTRIERUNG ============
+@app.post("/register-anonymous-user")
+def register_anonymous_user(user: RegisterUserInput):
+    try:
+        random_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        signature_support_key = f"Hyphen-{random_code}"
+        
+        user_data = {
+            "id": user.user_id,
+            "username": user.username.strip(),
+            "display_name": user.username.strip(),
+            "avatar_url": signature_support_key
+        }
+        
+        supabase.table('users').upsert(user_data, on_conflict='id').execute()
+        print(f"Kumpel {user.username} erfolgreich registriert mit Key: {signature_support_key}")
+        
+        return {
+            "message": "User erfolgreich registriert!",
+            "username": user.username,
+            "support_key": signature_support_key
+        }
+    except Exception as e:
+        print(f"Registrierungs-Fehler: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registrierungs-Fehler: {str(e)}")
+
+# ============ MATCHES MIT ANALYSE ============
+@app.get("/matches")
+async def get_matches():
+    try:
+        matches_response = supabase.table("matches").select("*").execute()
+        matches = matches_response.data or []
+        
+        matches_with_analysis = []
+        for match in matches:
+            fixture_id = match["api_fixture_id"]
+            analysis_response = supabase.table("match_analysis").select("*").eq("api_fixture_id", fixture_id).execute()
+            analysis = analysis_response.data[0] if analysis_response.data else None
+            
+            matches_with_analysis.append({
+                **match,
+                "analysis": analysis
+            })
+            
+        return matches_with_analysis
+    except Exception as e:
+        print(f"Fehler beim Laden der Spiele: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============ TIPS ============
+@app.post("/tips")
+def submit_tip(tip: TipInput):
+    try:
+        tip_data = {
+            "user_id": tip.user_id,
+            "api_fixture_id": tip.api_fixture_id,
+            "predicted_winner": tip.predicted_winner,
+            "tip_over_under": tip.tip_over_under,
+            "tip_btts": tip.tip_btts,
+            "tip_double_chance": tip.tip_double_chance,
+            "tip_exact_score_home": tip.tip_exact_score_home,
+            "tip_exact_score_away": tip.tip_exact_score_away
+        }
+        supabase.table('user_tips').upsert(tip_data, on_conflict='user_id,api_fixture_id').execute()
+        return {"message": "Tipp erfolgreich gespeichert!", "tip": tip_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+5. AKTUELLE page.tsx (FRONTEND - SAUBERE VERSION)
+--------------------------------------------------------------------------------
+
+'use client';
+
+import { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// --- HARTE VERBINDUNGSDATEN (Final versiegelt von Max!) ---
+const SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs';
+const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
+// ----------------------------------------------------------
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+export default function Home() {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [username, setUsername] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [supportKey, setSupportKey] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRegister = async () => {
+    if (!username.trim()) {
+      setError('Bitte gib einen Namen ein.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
+      if (authError) throw authError;
+      
+      const anonymousUserId = authData.user!.id;
+      setUserId(anonymousUserId);
+
+      const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const signatureSupportKey = `Hyphen-${randomCode}`;
+      setSupportKey(signatureSupportKey);
+
+      const { error: updateError } = await supabase.from('users').upsert({ 
+        id: anonymousUserId,
+        username: username.trim(), 
+        display_name: username.trim(), 
+        avatar_url: signatureSupportKey 
+      });
+      
+      if (updateError) throw updateError;
+
+      setStep(2);
+      
+    } catch (err: any) { 
+      console.error("Registrierungsfehler:", err);
+      setError(`Fehler: ${err.message || 'Unbekannter Fehler'}`); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
+  if (step === 1) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="bg-gray-800 border border-purple-500 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <h2 className="text-3xl font-extrabold mb-4 text-center bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Hyphen Test-Tool
+          </h2>
+          <p className="text-gray-400 text-center mb-6 text-sm">
+            Schritt 1: Gib deinen Namen ein, um die Supabase-Verbindung zu testen.
+          </p>
+          
+          {error && (
+            <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-lg mb-4 text-sm">
+              {error}
+            </div>
+          )}
+
+          <input 
+            type="text" 
+            placeholder="Dein Anzeigename" 
+            value={username} 
+            onChange={(e) => setUsername(e.target.value)} 
+            onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+            className="w-full p-4 rounded-xl bg-gray-900 text-white mb-6 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700" 
+          />
+          
+          <button 
+            onClick={handleRegister} 
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-400 font-bold py-4 rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" 
+          >
+            {loading ? 'Verarbeite...' : 'Jetzt testen 🚀'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white font-sans flex items-center justify-center p-4">
+      <div className="bg-gray-800 border border-green-500 rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
+        <div className="text-5xl mb-4">✅</div>
+        <h2 className="text-2xl font-bold mb-2 text-green-400">Registrierung erfolgreich!</h2>
+        <p className="text-gray-400 mb-6 text-sm">
+          Die Verbindung steht. Der Name wurde gespeichert und der Key generiert.
+        </p>
+
+        <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-6 rounded-xl shadow-2xl border border-purple-400/30 mb-6">
+          <div className="text-xs opacity-80 mb-1 uppercase tracking-widest">Dein Support-Schlüssel:</div>
+          <div className="text-3xl font-mono font-black tracking-wider mb-2">{supportKey}</div>
+          <div className="text-base font-bold bg-black/20 py-2 px-4 rounded-xl">
+            Gib Hyphen diesen Schlüssel – der Geist im Hintergrund hilft. 👻
+          </div>
+        </div>
+
+        <div className="text-left bg-gray-900 p-4 rounded-lg text-xs font-mono text-gray-400 break-all mb-6">
+          <p><span className="text-purple-400">User ID:</span> {userId}</p>
+          <p><span className="text-purple-400">Name:</span> {username}</p>
+        </div>
+
+        <button 
+          onClick={() => {
+            setStep(1);
+            setUsername('');
+            setUserId(null);
+            setSupportKey(null);
+          }}
+          className="w-full bg-gray-700 hover:bg-gray-600 font-bold py-3 rounded-xl transition-all" 
+        >
+          Test wiederholen
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+6. BEFEHL FÜR DEN NEUEN CHAT
+--------------------------------------------------------------------------------
+Kopiere den folgenden Block und füge ihn als ERSTE NACHRICHT im neuen Chat ein:
+
+---
+
+Hallo. Wir setzen das Projekt "Football AI Kumpel-Tipp" hier fort.
+Max (ich) bestimmt das Tempo. Wir arbeiten Schritt für Schritt, kein voreiliges Coden, kein Chaos.
+
+TECH STACK:
+- Frontend: Next.js (App Router) auf Vercel
+- Backend: FastAPI auf Railway
+- Datenbank: Supabase (PostgreSQL)
+
+AKTUELLER STAND & REGELN:
+1. Versiegelte URLs:
+   - SUPABASE_URL = 'https://knjgiaphysdgxenritzh.supabase.co'
+   - SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuamdpYXBoeXNkZ3hlbnJpdHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjY2NzIsImV4cCI6MjEwNDg0MjY3Mn0.iwZnNtcga1XPd1cyb2OJwjhvRIIrDxzbrmRed2LuShs'
+   - API_URL = 'https://football-ai-backend-production-a405.up.railway.app'
+2. Supabase: Anonymous Auth ist aktiviert. Site URL zeigt auf Vercel-Domain.
+   Spalten 'email', 'raw_user_meta_data', 'created_at' wurden zur Tabelle
+   'public.users' hinzugefügt. RLS ist deaktiviert.
+3. Frontend: Die page.tsx ist aktuell auf einen isolierten Test reduziert
+   (Maske 1: Namenseingabe -> Maske 2: Erfolg & Hyphen-XXXX Key).
+4. Backend: Die main.py hat saubere 4-Leerzeichen-Einrückungen, keine
+   doppelten Endpoints. CORS ist aktiviert.
+5. ARBEITSWEISE: Du lieferst NUR Code, wenn ich explizit danach frage.
+   Keine unaufgeforderten "Verbesserungen", keine kompletten Dateien,
+   es sei denn, ich fordere den "kompletten Block". Wir validieren jeden
+   Schritt einzeln. Kein Code-Chaos, keine dreifachen Endpoints.
+
+Bestätige kurz, dass du diese Regeln und den Status verstanden hast,
+und warte auf meinen nächsten Befehl.
+
+---
+
+================================================================================
+ENDE DER DOKUMENTATION
+================================================================================

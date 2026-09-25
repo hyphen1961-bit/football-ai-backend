@@ -1,0 +1,73 @@
+text=======================================================================
+PROJEKT-STATUS & ENTWICKLUNGS-ROADMAP (football-ai-app)
+=======================================================================
+
+WICHTIGE ANWEISUNG FÜR DIE KI:
+Dieses Dokument enthält den fixierten, wahren Zustand des Projekts. 
+Es gab in früheren Chats Verwirrung und Kontext-Verlust (u.a. bezüglich 
+einer "Kumpelgeschichte"). Dieses Dokument korrigiert alle Missverständnisse. 
+Arbeite AUSSCHLIESSLICH auf Basis der hier dokumentierten Architektur weiter!
+
+-----------------------------------------------------------------------
+1. BEREITS GELÖST & FIXIERT: Das Anonym-Auth- & Hyphen-Key-System
+-----------------------------------------------------------------------
+Das System für die anonyme Anmeldung wurde bereits erfolgreich gelöst und 
+implementiert (basierend auf der erfolgreichen Abstimmung mit dem Supabase/Vercel-AI-Chat). 
+
+Funktionsweise der Identität:
+- Wenn ein Benutzer die App das erste Mal startet, wird er nach seinem Namen gefragt.
+- Das System führt ein anonymes Login über Supabase durch (supabase.auth.signInAnonymously).
+- Der eingegebene Name wird in den Feldern 'username' und 'display_name' abgelegt.
+- RECOVERY-MECHANISMUS: Es wird automatisch ein eindeutiger Support-Schlüssel 
+  generiert (z.B. "Hyphen-TTDY", "Hyphen-BHNA"). Dieser Key wird zweckentfremdet 
+  in der Spalte 'avatar_url' in der 'users'-Tabelle gespeichert!
+- Dieser Hyphen-Key dient als Recovery-Schlüssel für den Benutzer, falls er 
+  den Cache löscht oder das Gerät wechselt.
+- Der aktuelle Zustand der 'users'-Tabelle (siehe 'users_rows.csv') bestätigt, 
+  dass diese Einträge korrekt existieren. Die Spalte 'email' bleibt konsequent leer, 
+  da sie in Vercel zu Problemen führte.
+
+ARCHITEKTUR-REGEL: Dieses bestehende System wird NICHT verändert, 
+überschrieben oder neu erfunden. Es ist die gesetzte Basis.
+
+-----------------------------------------------------------------------
+2. DIE AKTUELLE SIND-SITUATION DER SCORING-ENGINE (TIPPSPIEL)
+-----------------------------------------------------------------------
+- Workflow: Ein Benutzer gibt einen Tipp für ein Spiel ab. Sobald das reale Spiel 
+  vorbei ist, wird das Ergebnis MANUELL in 'public.matches (home_score / away_score)' 
+  eingetragen. (Dass die Tabelle im Testmodus aktuell leer ist, ist vollkommen korrekt so!).
+- Automatische Abrechnung: Ein Postgres-Trigger berechnet bei Eintragung des Ergebnisses 
+  automatisch die Punkte für alle Tipps (Formel: 3/1/2/2/5 Punkte + 5 Anti-KI-Bonus).
+- Speicherort: Tipps liegen in 'user_tips.tip_exact_score_home/away' (da MatchModal.tsx 
+  diese Felder befüllt).
+- Idempotenz: Die Engine rechnet bei nachträglichen Ergebnis-Korrekturen nur die 
+  Differenz in 'user_scores' ab. Es gibt keine Doppelzählungen oder Karteileichen.
+
+-----------------------------------------------------------------------
+3. DIE OFFENEN AUFGABEN (ROADMAP FÜR DIESEN CHAT)
+-----------------------------------------------------------------------
+
+AUFGABE 1: Frontend-Bug in MatchModal.tsx beheben (BLOCKER)
+- Problem: Im aktuellen Frontend-Code ist bei der Tippabgabe der Username 'Urs' 
+  hart als String codiert, anstatt die echte, aus dem Auth-System/KumpelProvider 
+  stammende anonyme 'user_id' (UUID) in die Tabelle 'user_tips' zu schreiben.
+- Ziel: Ersetze das hartcodierte 'Urs' durch die dynamische UUID des angemeldeten 
+  anonymen Users, damit die Scoring-Engine die Tipps korrekt zuordnen kann.
+
+AUFGABE 2: Beheben des Supabase 500er Fehlers & Sicherheits-Sperre
+- Problem: Beim Registrieren neuer anonymer User läuft der interne 'supabase_auth_admin' 
+  gelegentlich in einen "500 Internal Server Error" am Endpoint '/auth/v1/signup', 
+  weil die Trigger-Funktion 'public.handle_new_user()' die Spalte 'display_name' 
+  aufgrund einer Postgres 'search_path'-Falle nicht sauber auflöst.
+- Ziel: Erstelle das korrigierte SQL-Skript für die Datenbank:
+  1. Setze explizit "SET search_path = public" in der Trigger-Funktion.
+  2. Stelle sicher, dass der generierte Hyphen-Key (z.B. Hyphen-XXXX) fehlerfrei 
+     in die Spalte 'avatar_url' geschrieben wird.
+  3. Integriere direkt im Trigger eine Hard-Sperre für MAXIMAL 10 SPIELER. 
+     Sobald der 11. User versucht, sich anzumelden, muss der Trigger den Vorgang 
+     sauber mit einer Fehlermeldung abbrechen.
+
+=======================================================================
+ENDE DES DOKUMENTS - BITTE NUR ENTSPRECHEND DIESER ROADMAP REAGIEREN.
+=======================================================================
+Verwende Code mit Vorsicht.
