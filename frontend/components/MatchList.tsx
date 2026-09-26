@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Match, getLeagueName } from '@/types';
 import { supabase } from '@/lib/supabaseClient';
 import { useKumpel } from '@/contexts/KumpelProvider';
@@ -100,6 +100,60 @@ function calcLivePoints(tip: UserTip, homeScore: number, awayScore: number): num
   return points;
 }
 
+function LeagueSelect({
+  leagues,
+  value,
+  onChange,
+}: {
+  leagues: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const options = ['Alle Ligen', ...leagues];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="bg-[#2a2a27] text-white border border-[#444441] rounded-full text-sm px-4 h-[38px] box-border flex items-center gap-2 min-w-[170px] justify-between"
+      >
+        <span className="truncate">{value}</span>
+        <span className={`text-[10px] text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}>&#9662;</span>
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-2 min-w-[190px] bg-[#2a2a27] border border-[#444441] rounded-xl overflow-hidden shadow-lg">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+              className="w-full text-left pl-3 pr-4 py-2.5 text-sm text-white hover:bg-[#363630] flex items-center gap-2"
+            >
+              <span className="w-3 text-amber-400 text-xs">{opt === value ? '\u2713' : ''}</span>
+              <span className="truncate">{opt}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STATUS_OPTIONS: { key: StatusFilter; label: string; color: string }[] = [
   { key: 'all', label: 'alle', color: '#888780' },
   { key: 'open', label: 'offen', color: '#639922' },
@@ -171,30 +225,21 @@ export default function MatchList({ matches }: MatchListProps) {
   return (
     <div className="bg-[#1c1c1a] rounded-xl p-5">
       <div className="flex items-center justify-between mb-4 gap-3">
-        <select
-          value={selectedLeague}
-          onChange={(e) => setSelectedLeague(e.target.value)}
-          className="bg-[#2a2a27] text-white border border-[#444441] rounded-full text-sm px-4 h-[38px] box-border focus:outline-none"
-        >
-          <option>Alle Ligen</option>
-          {leagues.map((l) => (
-            <option key={l}>{l}</option>
-          ))}
-        </select>
+        <LeagueSelect leagues={leagues} value={selectedLeague} onChange={setSelectedLeague} />
 
-        <div className="flex items-center gap-[2px] bg-[#2a2a27] border border-[#444441] rounded-full h-[38px] px-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1 bg-[#2a2a27] border border-[#444441] rounded-full h-[38px] px-2 flex-shrink-0">
           {STATUS_OPTIONS.map((opt) => (
-            <div key={opt.key} className="relative w-8 h-full flex items-center justify-center">
+            <div key={opt.key} className="relative w-11 h-full flex items-center justify-center">
               <span
-                className="absolute -top-px left-3.5 text-[8px] whitespace-nowrap"
-                style={{ color: opt.color, transform: 'rotate(-22deg)' }}
+                className="absolute top-0.5 left-1/2 text-[9px] whitespace-nowrap origin-left"
+                style={{ color: opt.color, transform: 'translateX(-50%) rotate(-15deg)' }}
               >
                 {opt.label}
               </span>
               <button
                 type="button"
                 onClick={() => setStatusFilter(opt.key)}
-                className="w-6 h-6 rounded-full text-[11px]"
+                className="w-[26px] h-[26px] rounded-full text-[11px]"
                 style={{
                   background: statusFilter === opt.key && opt.key === 'all' ? '#444441' : 'transparent',
                   border: statusFilter === opt.key && opt.key !== 'all' ? `1px solid ${opt.color}` : 'none',
@@ -233,12 +278,12 @@ export default function MatchList({ matches }: MatchListProps) {
               >
                 {phase === 'finished' && (
                   <>
-                    <div className="flex items-center justify-between" style={{ color: color.text }}>
-                      <span className="text-[15px] font-medium">{match.home_team_name}</span>
-                      <span className="text-[22px] font-medium">
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" style={{ color: color.text }}>
+                      <span className="text-[15px] font-medium text-left truncate">{match.home_team_name}</span>
+                      <span className="text-[22px] font-medium whitespace-nowrap">
                         {match.home_score ?? '-'} : {match.away_score ?? '-'}
                       </span>
-                      <span className="text-[15px] font-medium">{match.away_team_name}</span>
+                      <span className="text-[15px] font-medium text-right truncate">{match.away_team_name}</span>
                     </div>
                     <p className="text-center text-[12px] mt-2" style={{ color: color.text }}>
                       {formatDate(match.kickoff_time)} &middot; Beendet &middot; {league}
@@ -248,10 +293,10 @@ export default function MatchList({ matches }: MatchListProps) {
 
                 {phase === 'live' && (
                   <>
-                    <div className="flex items-center justify-between" style={{ color: color.text }}>
-                      <span className="text-xl font-medium">{match.home_score ?? 0}</span>
-                      <span className="text-[13px] font-medium tracking-wide">&bull; LIVE &bull;</span>
-                      <span className="text-xl font-medium">{match.away_score ?? 0}</span>
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" style={{ color: color.text }}>
+                      <span className="text-xl font-medium text-left">{match.home_score ?? 0}</span>
+                      <span className="text-[13px] font-medium tracking-wide whitespace-nowrap">&bull; LIVE &bull;</span>
+                      <span className="text-xl font-medium text-right">{match.away_score ?? 0}</span>
                     </div>
                     <p className="text-center text-xs mt-1.5 mb-2.5" style={{ color: color.text }}>
                       {match.home_team_name} &ndash; {match.away_team_name} &middot; {league}
@@ -272,10 +317,10 @@ export default function MatchList({ matches }: MatchListProps) {
 
                 {phase === 'open' && (
                   <>
-                    <div className="flex items-center justify-between" style={{ color: color.text }}>
-                      <span className="text-[15px] font-medium">{match.home_team_name}</span>
-                      <span className="text-xl font-medium opacity-60">VS</span>
-                      <span className="text-[15px] font-medium">{match.away_team_name}</span>
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3" style={{ color: color.text }}>
+                      <span className="text-[15px] font-medium text-left truncate">{match.home_team_name}</span>
+                      <span className="text-xl font-medium opacity-60 whitespace-nowrap">VS</span>
+                      <span className="text-[15px] font-medium text-right truncate">{match.away_team_name}</span>
                     </div>
                     <p className="text-center text-[12px] mt-2" style={{ color: color.text }}>
                       {formatDate(match.kickoff_time)} &middot; {formatTime(match.kickoff_time)} &middot; {league}
