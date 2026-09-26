@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import MatchList from '@/components/MatchList';
-import HyphenHeader from '@/components/HyphenHeader';
 import { Match } from '@/types';
 
 const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
@@ -37,8 +36,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <HyphenHeader />
-      </div>
       {matches.length === 0 ? (
         <div className="text-center text-slate-400 py-12">Keine aktiven Spiele geladen.</div>
       ) : (
