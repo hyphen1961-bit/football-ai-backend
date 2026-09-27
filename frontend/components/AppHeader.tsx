@@ -3,11 +3,16 @@
 import { useEffect, useState, CSSProperties } from 'react';
 import { useKumpel } from '@/contexts/KumpelProvider';
 
+interface AppHeaderProps {
+  title: string;
+  subtitle?: string;
+}
+
 function rand(min: number, max: number) {
   return Math.round(min + Math.random() * (max - min));
 }
 
-export default function HyphenHeader() {
+export default function AppHeader({ title, subtitle }: AppHeaderProps) {
   const { kumpel } = useKumpel();
   const [path, setPath] = useState<{ x1: number; y1: number; x2: number; y2: number; x3: number; y3: number; dur: number } | null>(null);
 
@@ -54,10 +59,8 @@ export default function HyphenHeader() {
           </div>
         )}
 
-        <h1 className="text-2xl font-bold tracking-wide text-white">
-          Spielplan <span className="text-amber-400">&ndash;</span> Vorhersagen
-        </h1>
-        <p className="text-xs text-slate-500 mt-2">Hyphen findet seinen Weg</p>
+        <h1 className="text-2xl font-bold tracking-wide text-white">{title}</h1>
+        {subtitle && <p className="text-xs text-slate-500 mt-2">{subtitle}</p>}
       </div>
 
       <style jsx>{`

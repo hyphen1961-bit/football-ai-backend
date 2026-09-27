@@ -1,48 +1,27 @@
-'use client';
+import Link from 'next/link';
+import AppHeader from '@/components/AppHeader';
 
-import { useState, useEffect } from 'react';
-import HyphenHeader from '@/components/HyphenHeader';
-import MatchList from '@/components/MatchList';
-import { Match } from '@/types';
-
-const API_URL = 'https://football-ai-backend-production-a405.up.railway.app';
-
-export default function Home() {
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadMatches() {
-      try {
-        const res = await fetch(`${API_URL}/matches`);
-        const data = await res.json();
-        setMatches(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadMatches();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-white text-2xl font-bold animate-pulse">Meister Tianzi ordnet die Fussball-Kette...</div>
-      </div>
-    );
-  }
-
+export default function StartPage() {
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <HyphenHeader />
-        {matches.length === 0 ? (
-          <div className="text-center text-slate-400 py-12">Keine aktiven Spiele geladen.</div>
-        ) : (
-          <MatchList matches={matches} />
-        )}
+        <AppHeader title="Kumpel-Tipp" subtitle="Was möchtest du tun?" />
+
+        <div className="flex flex-col gap-3">
+          <Link
+            href="/spiele-wetten"
+            className="block rounded-xl p-6 transition-transform active:scale-[0.99]"
+            style={{ background: 'linear-gradient(90deg, #633806, #412402)' }}
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-3xl">⚽</span>
+              <div>
+                <p className="text-lg font-semibold text-white">Spiele &amp; Wetten</p>
+                <p className="text-sm" style={{ color: '#EF9F27' }}>Spielplan ansehen und tippen</p>
+              </div>
+            </div>
+          </Link>
+        </div>
       </div>
     </div>
   );
