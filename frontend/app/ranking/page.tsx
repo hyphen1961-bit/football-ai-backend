@@ -46,7 +46,7 @@ export default function RankingPage() {
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <AppHeader title="Rangliste" subtitle="Wer tippt am besten?" />
+        <AppHeader title="Rangliste" subtitle="Wer tippt am besten?" backHref="/" />
 
         <div className="bg-[#1c1c1a] rounded-xl p-5">
           <div className="flex justify-center mb-5">

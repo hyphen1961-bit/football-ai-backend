@@ -1,18 +1,20 @@
 'use client';
 
 import { useEffect, useState, CSSProperties } from 'react';
+import Link from 'next/link';
 import { useKumpel } from '@/contexts/KumpelProvider';
 
 interface AppHeaderProps {
   title: string;
   subtitle?: string;
+  backHref?: string;
 }
 
 function rand(min: number, max: number) {
   return Math.round(min + Math.random() * (max - min));
 }
 
-export default function AppHeader({ title, subtitle }: AppHeaderProps) {
+export default function AppHeader({ title, subtitle, backHref }: AppHeaderProps) {
   const { kumpel } = useKumpel();
   const [path, setPath] = useState<{ x1: number; y1: number; x2: number; y2: number; x3: number; y3: number; dur: number } | null>(null);
 
@@ -30,7 +32,17 @@ export default function AppHeader({ title, subtitle }: AppHeaderProps) {
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-[#1c1c1a] pt-5 pb-8 px-6 mb-6">
-      <div className="flex items-center justify-end mb-4">
+      <div className="flex items-center justify-between mb-4">
+        {backHref ? (
+          <Link
+            href={backHref}
+            className="flex items-center gap-1.5 text-sm text-slate-300 hover:text-white bg-[#2a2a27] rounded-full pl-2.5 pr-3.5 py-1.5 flex-shrink-0"
+          >
+            <span aria-hidden="true">&larr;</span> Start
+          </Link>
+        ) : (
+          <span />
+        )}
         {kumpel && (
           <div className="flex items-center gap-2 bg-[#2a2a27] rounded-full pl-1 pr-3 py-1 flex-shrink-0">
             <span className="w-5 h-5 rounded-full bg-[#F09595] text-[#501313] text-[10px] font-medium flex items-center justify-center">

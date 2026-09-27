@@ -37,7 +37,7 @@ export default function SpieleWettenPage() {
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <AppHeader title="Spielplan – Vorhersagen" subtitle="Hyphen findet seinen Weg" />
+        <AppHeader title="Spielplan – Vorhersagen" subtitle="Hyphen findet seinen Weg" backHref="/" />
         {matches.length === 0 ? (
           <div className="text-center text-slate-400 py-12">Keine aktiven Spiele geladen.</div>
         ) : (
