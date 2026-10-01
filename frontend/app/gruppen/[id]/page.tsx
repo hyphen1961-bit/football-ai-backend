@@ -40,6 +40,7 @@ export default function GruppenDetailPage() {
   const [myRole, setMyRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (groupId) loadAll();
@@ -73,6 +74,13 @@ export default function GruppenDetailPage() {
       const mine = (memberData as MemberRow[])?.find((m) => m.user_id === kumpel?.id);
       setMyRole(mine?.role || null);
     }
+
+    // Ungelesene Nachrichten dieser Gruppe
+    const { data: unreadData } = await supabase.rpc('get_unread_counts');
+    const row = ((unreadData as { group_id: string; unread_count: number }[]) || []).find(
+      (r) => r.group_id === groupId
+    );
+    setUnreadCount(row ? Number(row.unread_count) : 0);
 
     setLoading(false);
   }
@@ -146,12 +154,17 @@ export default function GruppenDetailPage() {
         </div>
 
         <Link
-  href={`/gruppen/${groupId}/nachrichten`}
-  className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
->
-  <p className="text-sm font-semibold text-white">📋 Nachrichten</p>
-  <p className="text-xs text-slate-500 mt-1">Infos vom Trainer</p>
-</Link>
+          href={`/gruppen/${groupId}/nachrichten`}
+          className="relative block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
+        >
+          {unreadCount > 0 && (
+            <span className="absolute top-4 right-4 min-w-[24px] h-6 px-2 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+          <p className="text-sm font-semibold text-white">📋 Nachrichten</p>
+          <p className="text-xs text-slate-500 mt-1">Infos vom Trainer</p>
+        </Link>
 
         {/* Mitgliederliste */}
         <div className="rounded-xl p-5 bg-[#1c1c1a]">
