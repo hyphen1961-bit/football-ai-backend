@@ -15,6 +15,7 @@ interface GroupRow {
 export default function GruppenPage() {
   const { kumpel } = useKumpel();
   const [groups, setGroups] = useState<GroupRow[]>([]);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
@@ -72,6 +73,19 @@ export default function GruppenPage() {
     } else {
       setGroups((data as unknown as GroupRow[]) || []);
     }
+
+    // Ungelesene Nachrichten pro Gruppe
+    const { data: unreadData, error: unreadError } = await supabase.rpc('get_unread_counts');
+    if (unreadError) {
+      console.error('Fehler beim Laden der Ungelesen-Zähler:', unreadError.message);
+    } else {
+      const map: Record<string, number> = {};
+      for (const r of (unreadData as { group_id: string; unread_count: number }[]) || []) {
+        map[r.group_id] = Number(r.unread_count);
+      }
+      setUnread(map);
+    }
+
     setLoading(false);
   }
 
@@ -130,19 +144,27 @@ export default function GruppenPage() {
           {!loading && groups.length === 0 && (
             <p className="text-sm text-slate-500">Du bist noch in keiner Gruppe.</p>
           )}
-          {groups.map((g) => (
-            <Link
-              key={g.group_id}
-              href={`/gruppen/${g.group_id}`}
-              className="block rounded-xl p-5 bg-[#1c1c1a] hover:bg-[#232320] transition-colors"
-            >
-              <p className="text-base font-semibold text-white">{g.groups?.name}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {g.groups?.type === 'team' ? 'Mannschaft' : 'Tippgemeinschaft'}
-                {g.groups?.department ? ` · ${g.groups.department}` : ''} · {g.role}
-              </p>
-            </Link>
-          ))}
+          {groups.map((g) => {
+            const n = unread[g.group_id] || 0;
+            return (
+              <Link
+                key={g.group_id}
+                href={`/gruppen/${g.group_id}`}
+                className="relative block rounded-xl p-5 bg-[#1c1c1a] hover:bg-[#232320] transition-colors"
+              >
+                {n > 0 && (
+                  <span className="absolute top-4 right-4 min-w-[24px] h-6 px-2 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                    {n > 99 ? '99+' : n}
+                  </span>
+                )}
+                <p className="text-base font-semibold text-white">{g.groups?.name}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {g.groups?.type === 'team' ? 'Mannschaft' : 'Tippgemeinschaft'}
+                  {g.groups?.department ? ` · ${g.groups.department}` : ''} · {g.role}
+                </p>
+              </Link>
+            );
+          })}
         </div>
 
         {/* Mit Code beitreten */}

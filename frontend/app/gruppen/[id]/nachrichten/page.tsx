@@ -1,271 +1,341 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import AppHeader from '@/components/AppHeader';
 import { useKumpel } from '@/contexts/KumpelProvider';
 import { supabase } from '@/lib/supabaseClient';
 
-interface GroupRow {
-  group_id: string;
+interface MemberRow {
+  user_id: string;
+  username: string;
+  display_name: string | null;
   role: string;
-  groups: { id: string; name: string; type: string; department: string | null } | null;
 }
 
-export default function GruppenPage() {
+interface MessageRow {
+  id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  readCount: number;
+  iRead: boolean;
+}
+
+interface ReplyRow {
+  message_id: string;
+  user_id: string;
+  status: 'dabei' | 'nicht_dabei';
+  note: string | null;
+  updated_at: string;
+}
+
+interface Draft {
+  status: 'dabei' | 'nicht_dabei' | null;
+  note: string;
+}
+
+export default function KlappPage() {
+  const params = useParams();
+  const groupId = params?.id as string;
   const { kumpel } = useKumpel();
-  const [groups, setGroups] = useState<GroupRow[]>([]);
-  const [unread, setUnread] = useState<Record<string, number>>({});
+
+  const [groupName, setGroupName] = useState('');
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [replies, setReplies] = useState<ReplyRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
-  const [code, setCode] = useState('');
-  const [joining, setJoining] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'team' | 'tipp_community'>('tipp_community');
-  const [newClub, setNewClub] = useState('');
-  const [newDept, setNewDept] = useState('junioren');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [savingReplyId, setSavingReplyId] = useState<string | null>(null);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadGroups();
-    loadAdminStatus();
-  }, []);
+    if (groupId) loadAll();
+  }, [groupId]);
 
-  async function loadAdminStatus() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data, error } = await supabase
-      .from('users')
-      .select('is_platform_admin')
-      .eq('id', session.user.id)
-      .maybeSingle();
-
-    if (!error && data?.is_platform_admin) {
-      setIsPlatformAdmin(true);
-      setNewType('team'); // Admin startet sinnvollerweise bei "Mannschaft"
-    }
-  }
-
-  async function loadGroups() {
+  async function loadAll() {
     setLoading(true);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: groupData } = await supabase
+      .from('groups')
+      .select('name')
+      .eq('id', groupId)
+      .maybeSingle();
+    setGroupName(groupData?.name || '');
+
+    const { data: memberData } = await supabase.rpc('get_group_members', { p_group_id: groupId });
+    const memberList = (memberData as MemberRow[]) || [];
+    setMembers(memberList);
+
+    const mine = memberList.find((m) => m.user_id === kumpel?.id);
+    setIsAdmin(mine?.role === 'admin');
+
+    const { data: msgData, error: msgError } = await supabase
+      .from('group_messages')
+      .select('id, sender_id, content, created_at')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: false });
+
+    if (msgError) {
+      console.error('Fehler beim Laden der Nachrichten:', msgError.message);
       setLoading(false);
       return;
     }
 
-    const { data, error } = await supabase
-      .from('group_members')
-      .select('group_id, role, groups ( id, name, type, department )')
-      .eq('user_id', session.user.id)
-      .order('joined_at', { ascending: false });
+    const msgs = msgData || [];
+    const enriched: MessageRow[] = [];
 
-    if (error) {
-      console.error('Fehler beim Laden der Gruppen:', error.message);
-    } else {
-      setGroups((data as unknown as GroupRow[]) || []);
-    }
+    for (const m of msgs) {
+      const { data: reads } = await supabase
+        .from('group_message_reads')
+        .select('user_id')
+        .eq('message_id', m.id);
 
-    // Ungelesene Nachrichten pro Gruppe
-    const { data: unreadData, error: unreadError } = await supabase.rpc('get_unread_counts');
-    if (unreadError) {
-      console.error('Fehler beim Laden der Ungelesen-Zähler:', unreadError.message);
-    } else {
-      const map: Record<string, number> = {};
-      for (const r of (unreadData as { group_id: string; unread_count: number }[]) || []) {
-        map[r.group_id] = Number(r.unread_count);
+      const readIds = (reads || []).map((r) => r.user_id);
+      enriched.push({
+        ...m,
+        readCount: readIds.length,
+        iRead: kumpel ? readIds.includes(kumpel.id) : false,
+      });
+
+      // nicht-Admins markieren beim Laden automatisch als gelesen
+      if (kumpel && !readIds.includes(kumpel.id)) {
+        await supabase.rpc('mark_message_read', { p_message_id: m.id });
       }
-      setUnread(map);
     }
+
+    setMessages(enriched);
+
+    // Antworten laden (Admin: alle, Mitglied: nur eigene)
+    const { data: replyData, error: replyLoadError } = await supabase.rpc('get_message_replies', {
+      p_group_id: groupId,
+    });
+    if (replyLoadError) {
+      console.error('Fehler beim Laden der Antworten:', replyLoadError.message);
+    }
+    setReplies((replyData as ReplyRow[]) || []);
 
     setLoading(false);
   }
 
-  async function handleJoin() {
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    setJoining(true);
-    setJoinError(null);
+  async function handleSend() {
+    const trimmed = newMessage.trim();
+    if (!trimmed || !kumpel) return;
+    setSending(true);
+    setSendError(null);
 
-    const { error } = await supabase.rpc('join_group_by_code', { p_invite_code: trimmed.toUpperCase() });
+    const { error } = await supabase
+      .from('group_messages')
+      .insert({ group_id: groupId, sender_id: kumpel.id, content: trimmed });
 
     if (error) {
-      setJoinError('Code ungültig oder abgelaufen.');
+      setSendError('Nachricht konnte nicht gesendet werden: ' + error.message);
     } else {
-      setCode('');
-      await loadGroups();
+      setNewMessage('');
+      await loadAll();
     }
-    setJoining(false);
+    setSending(false);
   }
 
-  async function handleCreate() {
-    const trimmed = newName.trim();
-    if (!trimmed) return;
-    setCreating(true);
-    setCreateError(null);
+  function myReplyFor(messageId: string): ReplyRow | undefined {
+    return replies.find((r) => r.message_id === messageId && r.user_id === kumpel?.id);
+  }
 
-    const { data, error } = await supabase.rpc('create_group', {
-      p_name: trimmed,
-      p_type: newType,
-      p_club_name: newType === 'team' && newClub.trim() ? newClub.trim() : null,
-      p_department: newType === 'team' ? newDept : null,
+  function draftFor(messageId: string): Draft {
+    if (drafts[messageId]) return drafts[messageId];
+    const r = myReplyFor(messageId);
+    return { status: r?.status ?? null, note: r?.note ?? '' };
+  }
+
+  function updateDraft(messageId: string, patch: Partial<Draft>) {
+    setDrafts((prev) => ({ ...prev, [messageId]: { ...draftFor(messageId), ...patch } }));
+  }
+
+  async function handleSaveReply(messageId: string) {
+    const draft = draftFor(messageId);
+    if (!draft.status) return;
+    setSavingReplyId(messageId);
+    setReplyError(null);
+
+    const { error } = await supabase.rpc('set_message_reply', {
+      p_message_id: messageId,
+      p_status: draft.status,
+      p_note: draft.note,
     });
 
     if (error) {
-      setCreateError('Konnte Gruppe nicht erstellen: ' + error.message);
-      setCreating(false);
-      return;
+      setReplyError('Antwort konnte nicht gespeichert werden: ' + error.message);
+    } else {
+      setDrafts((prev) => {
+        const copy = { ...prev };
+        delete copy[messageId];
+        return copy;
+      });
+      const { data: replyData } = await supabase.rpc('get_message_replies', { p_group_id: groupId });
+      setReplies((replyData as ReplyRow[]) || []);
     }
-
-    const row = Array.isArray(data) ? data[0] : data;
-    setCreatedCode(row?.invite_code || null);
-    setNewName('');
-    setNewClub('');
-    await loadGroups();
-    setCreating(false);
+    setSavingReplyId(null);
   }
+
+  function senderName(senderId: string) {
+    const m = members.find((mm) => mm.user_id === senderId);
+    return m?.display_name || m?.username || 'Unbekannt';
+  }
+
+  function formatTime(ts: string) {
+    const d = new Date(ts);
+    return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }) +
+      ' ' + d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  const replyingMembers = members.filter((m) => m.role !== 'admin');
 
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <AppHeader title="Gruppen" subtitle="Deine Mannschaft oder Freunde" backHref="/" />
+        <AppHeader title="Nachrichten" subtitle={groupName} backHref={`/gruppen/${groupId}`} />
 
-        {/* Eigene Gruppen */}
-        <div className="flex flex-col gap-3 mb-8">
-          {loading && <p className="text-sm text-slate-500">Lade Gruppen...</p>}
-          {!loading && groups.length === 0 && (
-            <p className="text-sm text-slate-500">Du bist noch in keiner Gruppe.</p>
-          )}
-          {groups.map((g) => {
-            const n = unread[g.group_id] || 0;
-            return (
-              <Link
-                key={g.group_id}
-                href={`/gruppen/${g.group_id}`}
-                className="relative block rounded-xl p-5 bg-[#1c1c1a] hover:bg-[#232320] transition-colors"
-              >
-                {n > 0 && (
-                  <span className="absolute top-4 right-4 min-w-[24px] h-6 px-2 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
-                    {n > 99 ? '99+' : n}
-                  </span>
-                )}
-                <p className="text-base font-semibold text-white">{g.groups?.name}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {g.groups?.type === 'team' ? 'Mannschaft' : 'Tippgemeinschaft'}
-                  {g.groups?.department ? ` · ${g.groups.department}` : ''} · {g.role}
-                </p>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Mit Code beitreten */}
-        <div className="rounded-xl p-5 bg-[#1c1c1a] mb-4">
-          <p className="text-sm font-semibold text-white mb-3">Einladungscode eingeben</p>
-          <div className="flex gap-2">
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="z.B. A1B2C3"
-              className="flex-1 bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+        {isAdmin && (
+          <div className="rounded-xl p-5 bg-[#1c1c1a] mb-4">
+            <p className="text-sm font-semibold text-white mb-3">Neue Nachricht an alle</p>
+            <textarea
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="z.B. Training morgen 18 Uhr, bitte Trainingsanzug mitbringen"
+              rows={3}
+              className="w-full bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 mb-3"
             />
             <button
-              onClick={handleJoin}
-              disabled={joining || !code.trim()}
+              onClick={handleSend}
+              disabled={sending || !newMessage.trim()}
               className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-semibold px-4 py-2 rounded-lg"
             >
-              {joining ? '...' : 'Beitreten'}
+              {sending ? 'Sende...' : 'Senden'}
             </button>
+            {sendError && <p className="text-red-400 text-xs mt-2">{sendError}</p>}
           </div>
-          {joinError && <p className="text-red-400 text-xs mt-2">{joinError}</p>}
-        </div>
+        )}
 
-        {/* Neue Gruppe erstellen */}
-        <div className="rounded-xl p-5 bg-[#1c1c1a]">
-          <button
-            onClick={() => setShowCreate((v) => !v)}
-            className="text-sm font-semibold text-white"
-          >
-            {showCreate ? '▾' : '▸'} Neue Gruppe erstellen
-          </button>
+        {replyError && <p className="text-red-400 text-xs mb-3">{replyError}</p>}
 
-          {showCreate && (
-            <div className="mt-4 flex flex-col gap-3">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder={newType === 'team' ? 'Name der Mannschaft, z.B. Junioren D' : 'Name der Tippgemeinschaft'}
-                className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
-              />
-
-              {isPlatformAdmin ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setNewType('team')}
-                    className={`flex-1 text-sm py-2 rounded-lg ${newType === 'team' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
-                  >
-                    Mannschaft
-                  </button>
-                  <button
-                    onClick={() => setNewType('tipp_community')}
-                    className={`flex-1 text-sm py-2 rounded-lg ${newType === 'tipp_community' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
-                  >
-                    Tippgemeinschaft
-                  </button>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-500">
-                  Du erstellst eine Tippgemeinschaft mit Freunden. Mannschaften legt aktuell nur der Vereinsverantwortliche an.
-                </p>
-              )}
-
-              {newType === 'team' && isPlatformAdmin && (
-                <>
-                  <input
-                    value={newClub}
-                    onChange={(e) => setNewClub(e.target.value)}
-                    placeholder="Verein, z.B. FC Bülach"
-                    className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
-                  />
-                  <select
-                    value={newDept}
-                    onChange={(e) => setNewDept(e.target.value)}
-                    className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="junioren">Junioren</option>
-                    <option value="aktive">Aktive</option>
-                    <option value="damen">Damen</option>
-                    <option value="senioren">Senioren</option>
-                  </select>
-                </>
-              )}
-
-              <button
-                onClick={handleCreate}
-                disabled={creating || !newName.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-semibold py-2 rounded-lg"
-              >
-                {creating ? 'Erstelle...' : 'Gruppe erstellen'}
-              </button>
-
-              {createError && <p className="text-red-400 text-xs">{createError}</p>}
-
-              {createdCode && (
-                <div className="bg-black/20 rounded-lg p-3 text-center">
-                  <p className="text-xs text-slate-400 mb-1">Einladungscode für Mitglieder:</p>
-                  <p className="text-xl font-mono font-black tracking-wider text-emerald-400">{createdCode}</p>
-                </div>
-              )}
-            </div>
+        <div className="flex flex-col gap-3">
+          {loading && <p className="text-sm text-slate-500">Lade Nachrichten...</p>}
+          {!loading && messages.length === 0 && (
+            <p className="text-sm text-slate-500">Noch keine Nachrichten.</p>
           )}
+          {messages.map((m) => {
+            const msgReplies = replies.filter((r) => r.message_id === m.id);
+            const yes = msgReplies.filter((r) => r.status === 'dabei');
+            const no = msgReplies.filter((r) => r.status === 'nicht_dabei');
+            const open = Math.max(replyingMembers.length - msgReplies.length, 0);
+            const draft = draftFor(m.id);
+            const mine = myReplyFor(m.id);
+            const unchanged =
+              !!mine && mine.status === draft.status && (mine.note ?? '') === draft.note;
+
+            return (
+              <div key={m.id} className="rounded-xl p-5 bg-[#1c1c1a]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-white">{senderName(m.sender_id)}</p>
+                  <p className="text-xs text-slate-500">{formatTime(m.created_at)}</p>
+                </div>
+                <p className="text-sm text-slate-200 whitespace-pre-wrap">{m.content}</p>
+                <p className="text-xs text-slate-500 mt-3">
+                  {isAdmin
+                    ? `${m.readCount} von ${members.length} gelesen`
+                    : m.iRead ? '✓ gelesen' : ''}
+                </p>
+
+                {/* Admin: Übersicht der Rückmeldungen */}
+                {isAdmin && (
+                  <div className="mt-3 pt-3 border-t border-[#2a2a27]">
+                    <p className="text-xs text-slate-300 mb-2">
+                      <span className="text-green-400">{yes.length} dabei</span>
+                      {' · '}
+                      <span className="text-amber-400">{no.length} nicht dabei</span>
+                      {' · '}
+                      <span className="text-slate-500">{open} offen</span>
+                    </p>
+                    {msgReplies.length > 0 && (
+                      <ul className="flex flex-col gap-1">
+                        {msgReplies.map((r) => (
+                          <li key={r.user_id} className="text-xs text-slate-300">
+                            <span className={r.status === 'dabei' ? 'text-green-400' : 'text-amber-400'}>
+                              {r.status === 'dabei' ? '✓' : '✗'}
+                            </span>{' '}
+                            {senderName(r.user_id)}
+                            {r.note ? <span className="text-slate-500"> – {r.note}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Mitglied: Rückmeldung abgeben (nur Admin sieht sie) */}
+                {!isAdmin && kumpel && (
+                  <div className="mt-3 pt-3 border-t border-[#2a2a27]">
+                    <p className="text-xs text-slate-500 mb-2">
+                      Deine Rückmeldung (sieht nur der Trainer)
+                    </p>
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        onClick={() => updateDraft(m.id, { status: 'dabei' })}
+                        className={`text-sm font-semibold px-3 py-1.5 rounded-lg ${
+                          draft.status === 'dabei'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-[#2a2a27] text-slate-300 hover:bg-[#33332f]'
+                        }`}
+                      >
+                        Dabei
+                      </button>
+                      <button
+                        onClick={() => updateDraft(m.id, { status: 'nicht_dabei' })}
+                        className={`text-sm font-semibold px-3 py-1.5 rounded-lg ${
+                          draft.status === 'nicht_dabei'
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-[#2a2a27] text-slate-300 hover:bg-[#33332f]'
+                        }`}
+                      >
+                        Nicht dabei
+                      </button>
+                    </div>
+                    {draft.status && (
+                      <>
+                        <input
+                          type="text"
+                          value={draft.note}
+                          onChange={(e) => updateDraft(m.id, { note: e.target.value })}
+                          placeholder={
+                            draft.status === 'nicht_dabei'
+                              ? 'Grund, z.B. Ferien, krank, Familie (optional)'
+                              : 'Kurznotiz (optional)'
+                          }
+                          className="w-full bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 mb-2"
+                        />
+                        <button
+                          onClick={() => handleSaveReply(m.id)}
+                          disabled={savingReplyId === m.id || unchanged}
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                        >
+                          {savingReplyId === m.id ? 'Speichere...' : 'Rückmeldung senden'}
+                        </button>
+                      </>
+                    )}
+                    {mine && unchanged && (
+                      <p className="text-xs text-green-400 mt-2">✓ Rückmeldung gespeichert</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
