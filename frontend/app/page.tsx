@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import AppHeader from '@/components/AppHeader';
+import UnreadBadge from '@/components/UnreadBadge';
 
 export default function StartPage() {
   return (
@@ -38,9 +39,10 @@ export default function StartPage() {
 
           <Link
             href="/gruppen"
-            className="block rounded-xl p-6 transition-transform active:scale-[0.99]"
+            className="relative block rounded-xl p-6 transition-transform active:scale-[0.99]"
             style={{ background: 'linear-gradient(90deg, #0B4A3F, #082E27)' }}
           >
+            <UnreadBadge />
             <div className="flex items-center gap-4">
               <span className="text-3xl">👥</span>
               <div>
