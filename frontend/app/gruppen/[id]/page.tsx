@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import AppHeader from '@/components/AppHeader';
 import { useKumpel } from '@/contexts/KumpelProvider';
 import { supabase } from '@/lib/supabaseClient';
+import Link from 'next/link';
 
 interface GroupInfo {
   id: string;
@@ -143,6 +144,14 @@ export default function GruppenDetailPage() {
           <p className="text-xs text-slate-500 mb-1">Einladungscode für neue Mitglieder:</p>
           <p className="text-xl font-mono font-black tracking-wider text-emerald-400">{group.invite_code}</p>
         </div>
+
+        <Link
+  href={`/gruppen/${groupId}/nachrichten`}
+  className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
+>
+  <p className="text-sm font-semibold text-white">📋 Nachrichten</p>
+  <p className="text-xs text-slate-500 mt-1">Infos vom Trainer</p>
+</Link>
 
         {/* Mitgliederliste */}
         <div className="rounded-xl p-5 bg-[#1c1c1a]">
