@@ -16,6 +16,7 @@ export default function GruppenPage() {
   const { kumpel } = useKumpel();
   const [groups, setGroups] = useState<GroupRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   const [code, setCode] = useState('');
   const [joining, setJoining] = useState(false);
@@ -23,7 +24,7 @@ export default function GruppenPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'team' | 'tipp_community'>('team');
+  const [newType, setNewType] = useState<'team' | 'tipp_community'>('tipp_community');
   const [newClub, setNewClub] = useState('');
   const [newDept, setNewDept] = useState('junioren');
   const [creating, setCreating] = useState(false);
@@ -32,13 +33,38 @@ export default function GruppenPage() {
 
   useEffect(() => {
     loadGroups();
+    loadAdminStatus();
   }, []);
+
+  async function loadAdminStatus() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('is_platform_admin')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (!error && data?.is_platform_admin) {
+      setIsPlatformAdmin(true);
+      setNewType('team'); // Admin startet sinnvollerweise bei "Mannschaft"
+    }
+  }
 
   async function loadGroups() {
     setLoading(true);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('group_members')
       .select('group_id, role, groups ( id, name, type, department )')
+      .eq('user_id', session.user.id)
       .order('joined_at', { ascending: false });
 
     if (error) {
@@ -154,31 +180,37 @@ export default function GruppenPage() {
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Name der Gruppe, z.B. Junioren D"
+                placeholder={newType === 'team' ? 'Name der Mannschaft, z.B. Junioren D' : 'Name der Tippgemeinschaft'}
                 className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
               />
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setNewType('team')}
-                  className={`flex-1 text-sm py-2 rounded-lg ${newType === 'team' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
-                >
-                  Mannschaft
-                </button>
-                <button
-                  onClick={() => setNewType('tipp_community')}
-                  className={`flex-1 text-sm py-2 rounded-lg ${newType === 'tipp_community' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
-                >
-                  Tippgemeinschaft
-                </button>
-              </div>
+              {isPlatformAdmin ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setNewType('team')}
+                    className={`flex-1 text-sm py-2 rounded-lg ${newType === 'team' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
+                  >
+                    Mannschaft
+                  </button>
+                  <button
+                    onClick={() => setNewType('tipp_community')}
+                    className={`flex-1 text-sm py-2 rounded-lg ${newType === 'tipp_community' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
+                  >
+                    Tippgemeinschaft
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Du erstellst eine Tippgemeinschaft mit Freunden. Mannschaften legt aktuell nur der Vereinsverantwortliche an.
+                </p>
+              )}
 
-              {newType === 'team' && (
+              {newType === 'team' && isPlatformAdmin && (
                 <>
                   <input
                     value={newClub}
                     onChange={(e) => setNewClub(e.target.value)}
-                    placeholder="Verein, z.B. FC Tuminen"
+                    placeholder="Verein, z.B. FC Bülach"
                     className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
                   />
                   <select
