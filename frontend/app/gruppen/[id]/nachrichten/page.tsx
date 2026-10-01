@@ -22,6 +22,19 @@ interface MessageRow {
   iRead: boolean;
 }
 
+interface ReplyRow {
+  message_id: string;
+  user_id: string;
+  status: 'dabei' | 'nicht_dabei';
+  note: string | null;
+  updated_at: string;
+}
+
+interface Draft {
+  status: 'dabei' | 'nicht_dabei' | null;
+  note: string;
+}
+
 export default function KlappPage() {
   const params = useParams();
   const groupId = params?.id as string;
@@ -31,11 +44,16 @@ export default function KlappPage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [replies, setReplies] = useState<ReplyRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [savingReplyId, setSavingReplyId] = useState<string | null>(null);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (groupId) loadAll();
@@ -93,6 +111,16 @@ export default function KlappPage() {
     }
 
     setMessages(enriched);
+
+    // Antworten laden (Admin: alle, Mitglied: nur eigene)
+    const { data: replyData, error: replyLoadError } = await supabase.rpc('get_message_replies', {
+      p_group_id: groupId,
+    });
+    if (replyLoadError) {
+      console.error('Fehler beim Laden der Antworten:', replyLoadError.message);
+    }
+    setReplies((replyData as ReplyRow[]) || []);
+
     setLoading(false);
   }
 
@@ -115,6 +143,46 @@ export default function KlappPage() {
     setSending(false);
   }
 
+  function myReplyFor(messageId: string): ReplyRow | undefined {
+    return replies.find((r) => r.message_id === messageId && r.user_id === kumpel?.id);
+  }
+
+  function draftFor(messageId: string): Draft {
+    if (drafts[messageId]) return drafts[messageId];
+    const r = myReplyFor(messageId);
+    return { status: r?.status ?? null, note: r?.note ?? '' };
+  }
+
+  function updateDraft(messageId: string, patch: Partial<Draft>) {
+    setDrafts((prev) => ({ ...prev, [messageId]: { ...draftFor(messageId), ...patch } }));
+  }
+
+  async function handleSaveReply(messageId: string) {
+    const draft = draftFor(messageId);
+    if (!draft.status) return;
+    setSavingReplyId(messageId);
+    setReplyError(null);
+
+    const { error } = await supabase.rpc('set_message_reply', {
+      p_message_id: messageId,
+      p_status: draft.status,
+      p_note: draft.note,
+    });
+
+    if (error) {
+      setReplyError('Antwort konnte nicht gespeichert werden: ' + error.message);
+    } else {
+      setDrafts((prev) => {
+        const copy = { ...prev };
+        delete copy[messageId];
+        return copy;
+      });
+      const { data: replyData } = await supabase.rpc('get_message_replies', { p_group_id: groupId });
+      setReplies((replyData as ReplyRow[]) || []);
+    }
+    setSavingReplyId(null);
+  }
+
   function senderName(senderId: string) {
     const m = members.find((mm) => mm.user_id === senderId);
     return m?.display_name || m?.username || 'Unbekannt';
@@ -125,6 +193,8 @@ export default function KlappPage() {
     return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }) +
       ' ' + d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
   }
+
+  const replyingMembers = members.filter((m) => m.role !== 'admin');
 
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
@@ -152,25 +222,120 @@ export default function KlappPage() {
           </div>
         )}
 
+        {replyError && <p className="text-red-400 text-xs mb-3">{replyError}</p>}
+
         <div className="flex flex-col gap-3">
           {loading && <p className="text-sm text-slate-500">Lade Nachrichten...</p>}
           {!loading && messages.length === 0 && (
             <p className="text-sm text-slate-500">Noch keine Nachrichten.</p>
           )}
-          {messages.map((m) => (
-            <div key={m.id} className="rounded-xl p-5 bg-[#1c1c1a]">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold text-white">{senderName(m.sender_id)}</p>
-                <p className="text-xs text-slate-500">{formatTime(m.created_at)}</p>
+          {messages.map((m) => {
+            const msgReplies = replies.filter((r) => r.message_id === m.id);
+            const yes = msgReplies.filter((r) => r.status === 'dabei');
+            const no = msgReplies.filter((r) => r.status === 'nicht_dabei');
+            const open = Math.max(replyingMembers.length - msgReplies.length, 0);
+            const draft = draftFor(m.id);
+            const mine = myReplyFor(m.id);
+            const unchanged =
+              !!mine && mine.status === draft.status && (mine.note ?? '') === draft.note;
+
+            return (
+              <div key={m.id} className="rounded-xl p-5 bg-[#1c1c1a]">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-white">{senderName(m.sender_id)}</p>
+                  <p className="text-xs text-slate-500">{formatTime(m.created_at)}</p>
+                </div>
+                <p className="text-sm text-slate-200 whitespace-pre-wrap">{m.content}</p>
+                <p className="text-xs text-slate-500 mt-3">
+                  {isAdmin
+                    ? `${m.readCount} von ${members.length} gelesen`
+                    : m.iRead ? '✓ gelesen' : ''}
+                </p>
+
+                {/* Admin: Übersicht der Rückmeldungen */}
+                {isAdmin && (
+                  <div className="mt-3 pt-3 border-t border-[#2a2a27]">
+                    <p className="text-xs text-slate-300 mb-2">
+                      <span className="text-green-400">{yes.length} dabei</span>
+                      {' · '}
+                      <span className="text-amber-400">{no.length} nicht dabei</span>
+                      {' · '}
+                      <span className="text-slate-500">{open} offen</span>
+                    </p>
+                    {msgReplies.length > 0 && (
+                      <ul className="flex flex-col gap-1">
+                        {msgReplies.map((r) => (
+                          <li key={r.user_id} className="text-xs text-slate-300">
+                            <span className={r.status === 'dabei' ? 'text-green-400' : 'text-amber-400'}>
+                              {r.status === 'dabei' ? '✓' : '✗'}
+                            </span>{' '}
+                            {senderName(r.user_id)}
+                            {r.note ? <span className="text-slate-500"> – {r.note}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Mitglied: Rückmeldung abgeben (nur Admin sieht sie) */}
+                {!isAdmin && kumpel && (
+                  <div className="mt-3 pt-3 border-t border-[#2a2a27]">
+                    <p className="text-xs text-slate-500 mb-2">
+                      Deine Rückmeldung (sieht nur der Trainer)
+                    </p>
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        onClick={() => updateDraft(m.id, { status: 'dabei' })}
+                        className={`text-sm font-semibold px-3 py-1.5 rounded-lg ${
+                          draft.status === 'dabei'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-[#2a2a27] text-slate-300 hover:bg-[#33332f]'
+                        }`}
+                      >
+                        Dabei
+                      </button>
+                      <button
+                        onClick={() => updateDraft(m.id, { status: 'nicht_dabei' })}
+                        className={`text-sm font-semibold px-3 py-1.5 rounded-lg ${
+                          draft.status === 'nicht_dabei'
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-[#2a2a27] text-slate-300 hover:bg-[#33332f]'
+                        }`}
+                      >
+                        Nicht dabei
+                      </button>
+                    </div>
+                    {draft.status && (
+                      <>
+                        <input
+                          type="text"
+                          value={draft.note}
+                          onChange={(e) => updateDraft(m.id, { note: e.target.value })}
+                          placeholder={
+                            draft.status === 'nicht_dabei'
+                              ? 'Grund, z.B. Ferien, krank, Familie (optional)'
+                              : 'Kurznotiz (optional)'
+                          }
+                          className="w-full bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 mb-2"
+                        />
+                        <button
+                          onClick={() => handleSaveReply(m.id)}
+                          disabled={savingReplyId === m.id || unchanged}
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                        >
+                          {savingReplyId === m.id ? 'Speichere...' : 'Rückmeldung senden'}
+                        </button>
+                      </>
+                    )}
+                    {mine && unchanged && (
+                      <p className="text-xs text-green-400 mt-2">✓ Rückmeldung gespeichert</p>
+                    )}
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-slate-200 whitespace-pre-wrap">{m.content}</p>
-              <p className="text-xs text-slate-500 mt-3">
-                {isAdmin
-                  ? `${m.readCount} von ${members.length} gelesen`
-                  : m.iRead ? '✓ gelesen' : ''}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
