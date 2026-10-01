@@ -100,12 +100,12 @@ export default function KlappPage() {
       const readIds = (reads || []).map((r) => r.user_id);
       enriched.push({
         ...m,
-        readCount: readIds.length,
+        readCount: readIds.filter((id) => id !== m.sender_id).length,
         iRead: kumpel ? readIds.includes(kumpel.id) : false,
       });
 
       // nicht-Admins markieren beim Laden automatisch als gelesen
-      if (kumpel && !readIds.includes(kumpel.id)) {
+      if (kumpel && m.sender_id !== kumpel.id && !readIds.includes(kumpel.id)) {
         await supabase.rpc('mark_message_read', { p_message_id: m.id });
       }
     }
@@ -248,7 +248,7 @@ export default function KlappPage() {
                 <p className="text-sm text-slate-200 whitespace-pre-wrap">{m.content}</p>
                 <p className="text-xs text-slate-500 mt-3">
                   {isAdmin
-                    ? `${m.readCount} von ${members.length} gelesen`
+                    ? `${m.readCount} von ${members.filter((mm) => mm.user_id !== m.sender_id).length} gelesen`
                     : m.iRead ? '✓ gelesen' : ''}
                 </p>
 
