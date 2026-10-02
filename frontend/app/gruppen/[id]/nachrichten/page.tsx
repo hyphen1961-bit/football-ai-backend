@@ -20,6 +20,7 @@ interface MessageRow {
   created_at: string;
   readCount: number;
   iRead: boolean;
+  deleted: boolean;
 }
 
 interface ReplyRow {
@@ -78,7 +79,7 @@ export default function KlappPage() {
 
     const { data: msgData, error: msgError } = await supabase
       .from('group_messages')
-      .select('id, sender_id, content, created_at')
+      .select('id, sender_id, content, created_at, deleted_at')
       .eq('group_id', groupId)
       .order('created_at', { ascending: false });
 
@@ -99,7 +100,11 @@ export default function KlappPage() {
 
       const readIds = (reads || []).map((r) => r.user_id);
       enriched.push({
-        ...m,
+        id: m.id,
+        sender_id: m.sender_id,
+        content: m.content,
+        created_at: m.created_at,
+        deleted: !!m.deleted_at,
         readCount: readIds.filter((id) => id !== m.sender_id).length,
         iRead: kumpel ? readIds.includes(kumpel.id) : false,
       });
@@ -141,6 +146,17 @@ export default function KlappPage() {
       await loadAll();
     }
     setSending(false);
+  }
+
+  async function handleDeleteMessage(messageId: string) {
+    if (!confirm('Diese Nachricht für alle löschen?')) return;
+    setReplyError(null);
+    const { error } = await supabase.rpc('delete_group_message', { p_message_id: messageId });
+    if (error) {
+      setReplyError('Löschen nicht möglich: ' + error.message);
+    } else {
+      await loadAll();
+    }
   }
 
   function myReplyFor(messageId: string): ReplyRow | undefined {
@@ -239,11 +255,33 @@ export default function KlappPage() {
             const unchanged =
               !!mine && mine.status === draft.status && (mine.note ?? '') === draft.note;
 
+            if (m.deleted) {
+              return (
+                <div key={m.id} className="rounded-xl p-5 bg-[#1c1c1a]">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-semibold text-slate-500">{senderName(m.sender_id)}</p>
+                    <p className="text-xs text-slate-600">{formatTime(m.created_at)}</p>
+                  </div>
+                  <p className="text-sm italic text-slate-500">Nachricht vom Trainer gelöscht</p>
+                </div>
+              );
+            }
+
             return (
               <div key={m.id} className="rounded-xl p-5 bg-[#1c1c1a]">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-semibold text-white">{senderName(m.sender_id)}</p>
-                  <p className="text-xs text-slate-500">{formatTime(m.created_at)}</p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs text-slate-500">{formatTime(m.created_at)}</p>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDeleteMessage(m.id)}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Löschen
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="text-sm text-slate-200 whitespace-pre-wrap">{m.content}</p>
                 <p className="text-xs text-slate-500 mt-3">
