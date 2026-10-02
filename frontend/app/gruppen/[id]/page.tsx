@@ -186,6 +186,16 @@ export default function GruppenDetailPage() {
           </Link>
         )}
 
+        {group.type === 'team' && (
+          <Link
+            href={`/gruppen/${groupId}/tippspiel`}
+            className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
+          >
+            <p className="text-sm font-semibold text-white">🎯 Tippspiel</p>
+            <p className="text-xs text-slate-500 mt-1">Spiele tippen und Rangliste pro Wettbewerb</p>
+          </Link>
+        )}
+
         {/* Mitgliederliste */}
         <div className="rounded-xl p-5 bg-[#1c1c1a]">
           <p className="text-sm font-semibold text-white mb-4">
