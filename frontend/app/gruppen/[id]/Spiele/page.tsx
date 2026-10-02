@@ -68,7 +68,7 @@ function cupLost(g: Game) {
   return o === 'N' || (o === 'U' && g.penalty_win === false);
 }
 
-export default function TippspielPage() {
+export default function SpielePage() {
   const params = useParams();
   const groupId = params?.id as string;
   const { kumpel } = useKumpel();
@@ -452,7 +452,7 @@ export default function TippspielPage() {
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <AppHeader title="Tippspiel" subtitle={groupName} backHref={`/gruppen/${groupId}`} />
+        <AppHeader title="Spiele & Resultate" subtitle={groupName} backHref={`/gruppen/${groupId}`} />
 
         {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
         {loading && <p className="text-sm text-slate-500">Lade...</p>}

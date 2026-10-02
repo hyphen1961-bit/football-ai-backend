@@ -178,11 +178,11 @@ export default function GruppenDetailPage() {
 
         {group.type === 'team' && (
           <Link
-            href={`/gruppen/${groupId}/tippspiel`}
+            href={`/gruppen/${groupId}/spiele`}
             className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
           >
-            <p className="text-sm font-semibold text-white">🎯 Tippspiel</p>
-            <p className="text-xs text-slate-500 mt-1">Spiele und Resultate der Mannschaft</p>
+            <p className="text-sm font-semibold text-white">⚽ Spiele &amp; Resultate</p>
+            <p className="text-xs text-slate-500 mt-1">Spielplan und Ergebnisse der Mannschaft</p>
           </Link>
         )}
 
