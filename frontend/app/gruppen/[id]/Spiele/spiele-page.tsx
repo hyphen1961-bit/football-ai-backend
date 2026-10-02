@@ -39,6 +39,16 @@ interface ResultDraft {
   pen: '' | 'win' | 'loss';
 }
 
+interface TournamentEntry {
+  id: string;
+  competition_id: string;
+  event_date: string;
+  name: string;
+  location: string | null;
+  final_rank: number | null;
+  note: string | null;
+}
+
 const TYPE_LABELS: Record<string, string> = {
   cup: 'Cup',
   meisterschaft: 'Meisterschaft',
@@ -84,7 +94,7 @@ export default function SpielePage() {
   // Formular neuer Wettbewerb
   const [showNewComp, setShowNewComp] = useState(false);
   const [compName, setCompName] = useState('');
-  const [compType, setCompType] = useState<'cup' | 'meisterschaft'>('meisterschaft');
+  const [compType, setCompType] = useState<'cup' | 'meisterschaft' | 'turnier'>('meisterschaft');
   const [compTeam, setCompTeam] = useState('');
   const [compNote, setCompNote] = useState('');
   const [savingComp, setSavingComp] = useState(false);
@@ -102,6 +112,18 @@ export default function SpielePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ResultDraft>({ gf: '', ga: '', pen: '' });
 
+  // Turniere (Typ "turnier": nur Datum, Ort und Schlussrang)
+  const [tournaments, setTournaments] = useState<TournamentEntry[]>([]);
+  const [showNewT, setShowNewT] = useState(false);
+  const [tDate, setTDate] = useState('');
+  const [tName, setTName] = useState('');
+  const [tLocation, setTLocation] = useState('');
+  const [tRank, setTRank] = useState('');
+  const [tNote, setTNote] = useState('');
+  const [savingT, setSavingT] = useState(false);
+  const [editingTId, setEditingTId] = useState<string | null>(null);
+  const [tRankDraft, setTRankDraft] = useState('');
+
   const isAdmin = myRole === 'admin';
   const selected = competitions.find((c) => c.id === selectedId) || null;
 
@@ -110,8 +132,14 @@ export default function SpielePage() {
   }, [groupId, kumpel?.id]);
 
   useEffect(() => {
-    if (selectedId) loadGames(selectedId);
-  }, [selectedId]);
+    if (!selectedId) return;
+    const c = competitions.find((x) => x.id === selectedId);
+    if (c?.comp_type === 'turnier') {
+      loadTournaments(selectedId);
+    } else {
+      loadGames(selectedId);
+    }
+  }, [selectedId, competitions]);
 
   async function loadBase() {
     setLoading(true);
@@ -167,6 +195,95 @@ export default function SpielePage() {
       return;
     }
     setGames((data as Game[]) || []);
+  }
+
+  async function loadTournaments(compId: string) {
+    const { data, error: err } = await supabase
+      .from('group_tournaments')
+      .select('id, competition_id, event_date, name, location, final_rank, note')
+      .eq('competition_id', compId)
+      .order('event_date', { ascending: true });
+
+    if (err) {
+      setError('Turniere konnten nicht geladen werden: ' + err.message);
+      return;
+    }
+    setTournaments((data as TournamentEntry[]) || []);
+  }
+
+  async function handleCreateTournament() {
+    if (!selected || !tDate || !tName.trim()) return;
+    const rank = tRank.trim() === '' ? null : parseInt(tRank, 10);
+    if (rank !== null && (Number.isNaN(rank) || rank < 1)) {
+      setError('Der Schlussrang muss eine Zahl ab 1 sein.');
+      return;
+    }
+    setSavingT(true);
+    setError(null);
+
+    const { error: err } = await supabase.from('group_tournaments').insert({
+      group_id: groupId,
+      competition_id: selected.id,
+      event_date: tDate,
+      name: tName.trim(),
+      location: tLocation.trim() || null,
+      final_rank: rank,
+      note: tNote.trim() || null,
+    });
+
+    if (err) {
+      setError('Turnier konnte nicht gespeichert werden: ' + err.message);
+    } else {
+      setTDate('');
+      setTName('');
+      setTLocation('');
+      setTRank('');
+      setTNote('');
+      setShowNewT(false);
+      await loadTournaments(selected.id);
+    }
+    setSavingT(false);
+  }
+
+  async function handleSaveRank(t: TournamentEntry) {
+    const rank = tRankDraft.trim() === '' ? null : parseInt(tRankDraft, 10);
+    if (rank !== null && (Number.isNaN(rank) || rank < 1)) {
+      setError('Der Schlussrang muss eine Zahl ab 1 sein.');
+      return;
+    }
+    setError(null);
+    const { error: err } = await supabase.from('group_tournaments').update({ final_rank: rank }).eq('id', t.id);
+    if (err) {
+      setError('Rang konnte nicht gespeichert werden: ' + err.message);
+    } else {
+      setEditingTId(null);
+      if (selected) await loadTournaments(selected.id);
+    }
+  }
+
+  async function handleDeleteTournament(t: TournamentEntry) {
+    if (!confirm(`Turnier «${t.name}» löschen?`)) return;
+    const { error: err } = await supabase.from('group_tournaments').delete().eq('id', t.id);
+    if (err) {
+      setError('Turnier konnte nicht gelöscht werden: ' + err.message);
+    } else if (selected) {
+      await loadTournaments(selected.id);
+    }
+  }
+
+  function rankLabel(rank: number | null) {
+    if (rank === null) return 'Rang offen';
+    const medal = rank === 1 ? '🥇 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
+    return `${medal}Rang ${rank}`;
+  }
+
+  function formatDate(d: string) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('de-CH', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   }
 
   async function handleCreateComp() {
@@ -505,11 +622,17 @@ export default function SpielePage() {
                     <input
                       value={compName}
                       onChange={(e) => setCompName(e.target.value)}
-                      placeholder={compType === 'cup' ? 'z.B. Cup 2026' : 'z.B. Meisterschaft Herbst 2026'}
+                      placeholder={
+                        compType === 'cup'
+                          ? 'z.B. Cup 2026'
+                          : compType === 'turnier'
+                            ? 'z.B. Hallenturniere Winter 2026/27'
+                            : 'z.B. Meisterschaft Herbst 2026'
+                      }
                       className={inputClass}
                     />
                     <div className="flex gap-2">
-                      {(['meisterschaft', 'cup'] as const).map((t) => (
+                      {(['meisterschaft', 'cup', 'turnier'] as const).map((t) => (
                         <button
                           key={t}
                           onClick={() => setCompType(t)}
@@ -578,8 +701,120 @@ export default function SpielePage() {
                   )}
                 </div>
 
+                {/* Turniere (nur Typ Turnier) */}
+                {selected.comp_type === 'turnier' && (
+                  <>
+                    {isAdmin && (
+                      <div className="rounded-xl p-5 bg-[#1c1c1a] mb-4">
+                        <button onClick={() => setShowNewT((v) => !v)} className="text-sm font-semibold text-white">
+                          {showNewT ? '▾' : '▸'} Turnier hinzufügen
+                        </button>
+                        {showNewT && (
+                          <div className="mt-4 flex flex-col gap-3">
+                            <input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} className={inputClass} />
+                            <input
+                              value={tName}
+                              onChange={(e) => setTName(e.target.value)}
+                              placeholder="Name, z.B. Hallenturnier Zürich"
+                              className={inputClass}
+                            />
+                            <input
+                              value={tLocation}
+                              onChange={(e) => setTLocation(e.target.value)}
+                              placeholder="Ort (optional)"
+                              className={inputClass}
+                            />
+                            <input
+                              type="number"
+                              min={1}
+                              value={tRank}
+                              onChange={(e) => setTRank(e.target.value)}
+                              placeholder="Schlussrang (optional, kann später nachgetragen werden)"
+                              className={inputClass}
+                            />
+                            <input
+                              value={tNote}
+                              onChange={(e) => setTNote(e.target.value)}
+                              placeholder="Notiz (optional)"
+                              className={inputClass}
+                            />
+                            <button
+                              onClick={handleCreateTournament}
+                              disabled={savingT || !tDate || !tName.trim()}
+                              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-semibold py-2 rounded-lg"
+                            >
+                              {savingT ? 'Speichere...' : 'Turnier speichern'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {tournaments.length === 0 && <p className="text-sm text-slate-500">Noch keine Turniere eingetragen.</p>}
+
+                    <div className="flex flex-col gap-3">
+                      {tournaments.map((t) => (
+                        <div key={t.id} className="rounded-xl p-4 bg-[#1c1c1a]">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs text-slate-400">{formatDate(t.event_date)}</p>
+                            <span
+                              className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${
+                                t.final_rank === null ? 'text-slate-400 bg-[#2a2a27]' : 'text-amber-300 bg-amber-900/30'
+                              }`}
+                            >
+                              {rankLabel(t.final_rank)}
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-white">{t.name}</p>
+                          {t.location && <p className="text-xs text-slate-500 mt-1">📍 {t.location}</p>}
+                          {t.note && <p className="text-xs text-slate-400 mt-2">{t.note}</p>}
+
+                          {isAdmin && editingTId !== t.id && (
+                            <div className="flex gap-4 mt-3">
+                              <button
+                                onClick={() => {
+                                  setEditingTId(t.id);
+                                  setTRankDraft(t.final_rank !== null ? String(t.final_rank) : '');
+                                }}
+                                className="text-xs font-semibold text-indigo-300 hover:text-indigo-200"
+                              >
+                                {t.final_rank === null ? 'Rang eintragen' : 'Rang ändern'}
+                              </button>
+                              <button onClick={() => handleDeleteTournament(t)} className="text-xs text-red-400 hover:text-red-300">
+                                Löschen
+                              </button>
+                            </div>
+                          )}
+
+                          {isAdmin && editingTId === t.id && (
+                            <div className="flex items-center gap-2 mt-3">
+                              <input
+                                type="number"
+                                min={1}
+                                value={tRankDraft}
+                                onChange={(e) => setTRankDraft(e.target.value)}
+                                placeholder="Rang"
+                                className="w-24 bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                              />
+                              <button
+                                onClick={() => handleSaveRank(t)}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+                              >
+                                Speichern
+                              </button>
+                              <button onClick={() => setEditingTId(null)} className="text-xs text-slate-400 hover:text-slate-200">
+                                Abbrechen
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
                 {/* Neues Spiel (Trainer) */}
-                {isAdmin && (
+                {isAdmin && selected.comp_type !== 'turnier' && (
                   <div className="rounded-xl p-5 bg-[#1c1c1a] mb-4">
                     <button onClick={() => setShowNewGame((v) => !v)} className="text-sm font-semibold text-white">
                       {showNewGame ? '▾' : '▸'} Spiel hinzufügen
@@ -651,16 +886,18 @@ export default function SpielePage() {
                 )}
 
                 {/* Spiele */}
-                {games.length === 0 && <p className="text-sm text-slate-500">Noch keine Spiele eingetragen.</p>}
+                {selected.comp_type !== 'turnier' && games.length === 0 && (
+                  <p className="text-sm text-slate-500">Noch keine Spiele eingetragen.</p>
+                )}
 
-                {upcoming.length > 0 && (
+                {selected.comp_type !== 'turnier' && upcoming.length > 0 && (
                   <>
                     <p className="text-xs font-semibold text-slate-400 mb-2 mt-2">Anstehend</p>
                     <div className="flex flex-col gap-3 mb-4">{upcoming.map(renderGame)}</div>
                   </>
                 )}
 
-                {finished.length > 0 && (
+                {selected.comp_type !== 'turnier' && finished.length > 0 && (
                   <>
                     <p className="text-xs font-semibold text-slate-400 mb-2 mt-2">Gespielt</p>
                     <div className="flex flex-col gap-3">{finished.map(renderGame)}</div>
