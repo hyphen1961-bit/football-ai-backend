@@ -312,6 +312,8 @@ export default function SpielePage() {
       setCompNote('');
       setShowNewComp(false);
       await loadCompetitions(false);
+      setGames([]);
+      setTournaments([]);
       if (data?.id) setSelectedId(data.id);
     }
     setSavingComp(false);
@@ -446,6 +448,18 @@ export default function SpielePage() {
 
   const upcoming = games.filter((g) => !isPlayed(g));
   const finished = games.filter(isPlayed).reverse();
+
+  // Turniere: Zusammenfassung der Ränge, z.B. "2× 1. Rang · 2× 2. Rang · 1× 4. Rang"
+  const rankCounts = new Map<number, number>();
+  tournaments.forEach((t) => {
+    if (t.final_rank !== null) rankCounts.set(t.final_rank, (rankCounts.get(t.final_rank) || 0) + 1);
+  });
+  const openRanks = tournaments.filter((t) => t.final_rank === null).length;
+  const rankSummary =
+    [...rankCounts.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([r, n]) => `${n}× ${r === 1 ? '🥇 ' : r === 2 ? '🥈 ' : r === 3 ? '🥉 ' : ''}${r}. Rang`)
+      .join(' · ') + (openRanks > 0 ? `${rankCounts.size > 0 ? ' · ' : ''}${openRanks}× Rang offen` : '');
 
   function renderGame(g: Game) {
     const team = selected?.team_name || '';
@@ -589,8 +603,11 @@ export default function SpielePage() {
                   <button
                     key={c.id}
                     onClick={() => {
+                      setGames([]);
+                      setTournaments([]);
                       setSelectedId(c.id);
                       setEditingId(null);
+                      setEditingTId(null);
                       setShowNewGame(false);
                     }}
                     className={`text-sm font-semibold px-3 py-2 rounded-lg ${
@@ -689,7 +706,13 @@ export default function SpielePage() {
 
                   {cupStatus && <p className="text-sm font-semibold text-amber-300 mt-3">{cupStatus}</p>}
 
-                  {played.length > 0 && (
+                  {selected.comp_type === 'turnier' && tournaments.length > 0 && (
+                    <p className="text-xs text-slate-300 mt-3">
+                      {tournaments.length} {tournaments.length === 1 ? 'Turnier' : 'Turniere'} · {rankSummary}
+                    </p>
+                  )}
+
+                  {selected.comp_type !== 'turnier' && played.length > 0 && (
                     <p className="text-xs text-slate-300 mt-3">
                       <span className="text-green-400">{wins} S</span>
                       {' · '}
