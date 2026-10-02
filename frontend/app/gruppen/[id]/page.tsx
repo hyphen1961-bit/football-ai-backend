@@ -166,6 +166,16 @@ export default function GruppenDetailPage() {
           <p className="text-xs text-slate-500 mt-1">Infos vom Trainer</p>
         </Link>
 
+        {group.type === 'team' && (
+          <Link
+            href={`/gruppen/${groupId}/chat`}
+            className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
+          >
+            <p className="text-sm font-semibold text-white">💬 Chat</p>
+            <p className="text-xs text-slate-500 mt-1">Mit Trainer oder nur Kinder</p>
+          </Link>
+        )}
+
         {/* Mitgliederliste */}
         <div className="rounded-xl p-5 bg-[#1c1c1a]">
           <p className="text-sm font-semibold text-white mb-4">
