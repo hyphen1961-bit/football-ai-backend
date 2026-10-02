@@ -21,6 +21,7 @@ interface MessageRow {
   readCount: number;
   iRead: boolean;
   deleted: boolean;
+  deletedAt: string | null;
 }
 
 interface ReplyRow {
@@ -55,6 +56,7 @@ export default function KlappPage() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [savingReplyId, setSavingReplyId] = useState<string | null>(null);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   useEffect(() => {
     if (groupId) loadAll();
@@ -105,6 +107,7 @@ export default function KlappPage() {
         content: m.content,
         created_at: m.created_at,
         deleted: !!m.deleted_at,
+        deletedAt: m.deleted_at ?? null,
         readCount: readIds.filter((id) => id !== m.sender_id).length,
         iRead: kumpel ? readIds.includes(kumpel.id) : false,
       });
@@ -154,6 +157,16 @@ export default function KlappPage() {
     const { error } = await supabase.rpc('delete_group_message', { p_message_id: messageId });
     if (error) {
       setReplyError('Löschen nicht möglich: ' + error.message);
+    } else {
+      await loadAll();
+    }
+  }
+
+  async function handleRestoreMessage(messageId: string) {
+    setReplyError(null);
+    const { error } = await supabase.rpc('restore_group_message', { p_message_id: messageId });
+    if (error) {
+      setReplyError('Wiederherstellen nicht möglich: ' + error.message);
     } else {
       await loadAll();
     }
@@ -211,6 +224,9 @@ export default function KlappPage() {
   }
 
   const replyingMembers = members.filter((m) => m.role !== 'admin');
+  const deletedCount = messages.filter((m) => m.deleted).length;
+  // Gelöschte sieht nur der Trainer, und nur wenn er den Schalter einschaltet
+  const visibleMessages = messages.filter((m) => !m.deleted || (isAdmin && showDeleted));
 
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
@@ -242,10 +258,18 @@ export default function KlappPage() {
 
         <div className="flex flex-col gap-3">
           {loading && <p className="text-sm text-slate-500">Lade Nachrichten...</p>}
-          {!loading && messages.length === 0 && (
+          {!loading && visibleMessages.length === 0 && (
             <p className="text-sm text-slate-500">Noch keine Nachrichten.</p>
           )}
-          {messages.map((m) => {
+          {isAdmin && deletedCount > 0 && (
+            <button
+              onClick={() => setShowDeleted((v) => !v)}
+              className="self-start text-xs text-slate-400 hover:text-slate-200 bg-[#1c1c1a] rounded-lg px-3 py-2"
+            >
+              {showDeleted ? 'Gelöschte ausblenden' : `Gelöschte anzeigen (${deletedCount})`}
+            </button>
+          )}
+          {visibleMessages.map((m) => {
             const msgReplies = replies.filter((r) => r.message_id === m.id);
             const yes = msgReplies.filter((r) => r.status === 'dabei');
             const no = msgReplies.filter((r) => r.status === 'nicht_dabei');
@@ -257,12 +281,24 @@ export default function KlappPage() {
 
             if (m.deleted) {
               return (
-                <div key={m.id} className="rounded-xl p-5 bg-[#1c1c1a]">
+                <div key={m.id} className="rounded-xl p-5 bg-[#161614] border border-dashed border-[#3a3a36]">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-semibold text-slate-500">{senderName(m.sender_id)}</p>
                     <p className="text-xs text-slate-600">{formatTime(m.created_at)}</p>
                   </div>
-                  <p className="text-sm italic text-slate-500">Nachricht vom Trainer gelöscht</p>
+                  <p className="text-sm text-slate-500 whitespace-pre-wrap">{m.content}</p>
+                  <div className="flex items-center justify-between mt-3">
+                    <p className="text-xs text-slate-600">
+                      Gelöscht{m.deletedAt ? ' am ' + formatTime(m.deletedAt) : ''} · {m.readCount} von{' '}
+                      {members.filter((mm) => mm.user_id !== m.sender_id).length} gelesen
+                    </p>
+                    <button
+                      onClick={() => handleRestoreMessage(m.id)}
+                      className="text-xs font-semibold text-emerald-400 hover:text-emerald-300"
+                    >
+                      Wiederherstellen
+                    </button>
+                  </div>
                 </div>
               );
             }
