@@ -151,8 +151,8 @@ export default function AppHeader({ title, subtitle, backHref, brand = false }: 
           display: inline-block;
           width: 0.42em;
           height: 0.11em;
-          margin: 0 0.14em 0 0.06em;
-          vertical-align: 0.3em;
+          margin: 0 0 0 0.22em;
+          vertical-align: 0.37em;
           border-radius: 9999px;
           background: #ffe7ae;
           transform: skewX(-14deg);
