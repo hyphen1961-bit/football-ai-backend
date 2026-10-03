@@ -92,7 +92,11 @@ export default function AppHeader({ title, subtitle, backHref, brand = false }: 
 
         {brand ? (
           <>
-            <h1 className="hyphen-wordmark">{title}</h1>
+            <h1 className="hyphen-wordmark" aria-label={title}>
+              <span aria-hidden="true">{title.slice(0, 2)}</span>
+              <span aria-hidden="true" className="hyphen-glowdash" />
+              <span aria-hidden="true">{title.slice(2)}</span>
+            </h1>
             <p key={lineIdx} className="hyphen-tagline text-sm text-slate-300 mt-3">
               {BRAND_LINES[lineIdx].map((word, i) => (
                 <span key={word}>
@@ -143,6 +147,22 @@ export default function AppHeader({ title, subtitle, backHref, brand = false }: 
           color: transparent;
           filter: drop-shadow(0 0 14px rgba(250, 199, 117, 0.3));
         }
+        .hyphen-glowdash {
+          display: inline-block;
+          width: 0.42em;
+          height: 0.11em;
+          margin: 0 0.14em 0 0.06em;
+          vertical-align: 0.3em;
+          border-radius: 9999px;
+          background: #ffe7ae;
+          transform: skewX(-14deg);
+          box-shadow: 0 0 10px 2px rgba(250, 199, 117, 0.9), 0 0 24px 6px rgba(250, 199, 117, 0.45);
+          animation: dash-glow 2.8s ease-in-out infinite;
+        }
+        @keyframes dash-glow {
+          0%, 100% { box-shadow: 0 0 8px 1px rgba(250, 199, 117, 0.7), 0 0 18px 4px rgba(250, 199, 117, 0.3); }
+          50% { box-shadow: 0 0 14px 3px rgba(255, 220, 140, 1), 0 0 32px 9px rgba(250, 199, 117, 0.55); }
+        }
         .hyphen-tagline {
           animation: tagline-in 0.7s ease both;
         }
@@ -157,6 +177,7 @@ export default function AppHeader({ title, subtitle, backHref, brand = false }: 
         }
         @media (prefers-reduced-motion: reduce) {
           .hyphen-tagline { animation: none; }
+          .hyphen-glowdash { animation: none; }
         }
       `}</style>
     </div>
