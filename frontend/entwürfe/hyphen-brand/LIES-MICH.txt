@@ -1,0 +1,27 @@
+HYPHEN - Entwurfspaket (Stand 03.10.2026)
+
+Idee: Der Bindestrich (Hyphen) verbindet Verein, Familie, Spiel. Ein goldener Punkt fliegt
+als Ball mit Schweif ueber den Strich. Farben: Gold (#FAC775 bis Amber) auf Dunkel.
+
+ORDNER entwuerfe/ (Originale, unveraendert, als Vorlage fuer den Logo-Designer)
+  icon-final-original.png    gewaehltes Icon (Strich, Ball, Schweif), 807 x 450 Pixel, mit hellem Rand und Schatten
+  icon-erster-entwurf.png    erster Icon-Entwurf (Strich mit kleinem Punkt)
+  logo-ufo-original.png      Logo mit goldenem UFO und Orbit-Ring, Zeile "...thinking outside the box"
+  logo-erster-entwurf.jpg    erster Logo-Entwurf (Grossbuchstaben, UFO)
+  icon-master-1024-hochskaliert.png   bereinigtes Icon auf 1024 Pixel hochgerechnet (nur Groessenvorlage, wirkt leicht weich)
+
+FERTIG ZUGESCHNITTEN
+  app/icon.png          512 x 512, randloses Quadrat (Next.js: app/icon.png)
+  app/apple-icon.png    180 x 180 (iPhone-Startbildschirm)
+  app/favicon.ico       16/32/48 Pixel, Kometen-Ausschnitt (Ball mit Schweif)
+  icon-192.png          192 x 192 (Android / Web-App)
+  icon-klein-512.png    Kometen-Ausschnitt gross, fuer die kleinsten Groessen
+  favicon-16/32/48.png  einzelne Favicon-Groessen
+
+HINWEISE FUER DEN DESIGNER
+  - Die Entwuerfe sind KI-Bilder (Pixelgrafik, nicht frei skalierbar). Fuer Druck, Website und eine
+    spaetere Markeneintragung braucht es einen sauberen Vektor (SVG) und ein durchsichtiges PNG.
+  - Das Logo zeigt den Bindestrich nicht. Idee: "HY-PHEN" (Silbentrennung), der Strich gross und leuchtend.
+  - Das UFO kommt auch im Projekt ORBiS vor. Wenn die Projekte getrennt wirken sollen, braucht Hyphen ein eigenes Zeichen.
+  - Das Icon muss bei 16 bis 32 Pixel lesbar bleiben (Ball mit Schweif). Der dünne Strich verschwindet dort.
+  - Vor der oeffentlichen Nutzung Name und Zeichen im Markenregister (Swissreg) und bei den Domains pruefen.

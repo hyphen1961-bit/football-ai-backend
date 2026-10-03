@@ -1,3 +1,5 @@
+// Ablegen unter: app/page.tsx (ersetzt die bisherige Startseite)
+
 import Link from 'next/link';
 import AppHeader from '@/components/AppHeader';
 import UnreadBadge from '@/components/UnreadBadge';
@@ -6,7 +8,7 @@ export default function StartPage() {
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <AppHeader title="Kumpel-Tipp" subtitle="Was möchtest du tun?" />
+        <AppHeader brand title="Hyphen" subtitle="Was möchtest du tun?" />
 
         <div className="flex flex-col gap-3">
           <Link

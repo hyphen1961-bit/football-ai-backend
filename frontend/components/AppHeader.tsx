@@ -1,5 +1,7 @@
 'use client';
 
+// Ablegen unter: components/AppHeader.tsx (ersetzt die bisherige Datei)
+
 import { useEffect, useState, CSSProperties } from 'react';
 import Link from 'next/link';
 import { useKumpel } from '@/contexts/KumpelProvider';
@@ -8,15 +10,25 @@ interface AppHeaderProps {
   title: string;
   subtitle?: string;
   backHref?: string;
+  brand?: boolean; // true = Markenauftritt "Hyphen" (nur Startseite)
 }
+
+// Wechselnde Zeilen unter dem Markennamen: der Bindestrich verbindet
+const BRAND_LINES: string[][] = [
+  ['Verein', 'Familie', 'Spiel'],
+  ['Kind', 'Eltern', 'Trainer'],
+  ['Tipp', 'Mensch', 'KI'],
+  ['Heim', 'Gast', 'Gemeinschaft'],
+];
 
 function rand(min: number, max: number) {
   return Math.round(min + Math.random() * (max - min));
 }
 
-export default function AppHeader({ title, subtitle, backHref }: AppHeaderProps) {
+export default function AppHeader({ title, subtitle, backHref, brand = false }: AppHeaderProps) {
   const { kumpel } = useKumpel();
   const [path, setPath] = useState<{ x1: number; y1: number; x2: number; y2: number; x3: number; y3: number; dur: number } | null>(null);
+  const [lineIdx, setLineIdx] = useState(0);
 
   useEffect(() => {
     setPath({
@@ -29,6 +41,13 @@ export default function AppHeader({ title, subtitle, backHref }: AppHeaderProps)
       dur: rand(5, 9),
     });
   }, []);
+
+  // Wechselnde Zeile nur im Markenauftritt
+  useEffect(() => {
+    if (!brand) return;
+    const t = setInterval(() => setLineIdx((i) => (i + 1) % BRAND_LINES.length), 3600);
+    return () => clearInterval(t);
+  }, [brand]);
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-[#1c1c1a] pt-5 pb-8 px-6 mb-6">
@@ -71,8 +90,25 @@ export default function AppHeader({ title, subtitle, backHref }: AppHeaderProps)
           </div>
         )}
 
-        <h1 className="text-2xl font-bold tracking-wide text-white">{title}</h1>
-        {subtitle && <p className="text-xs text-slate-500 mt-2">{subtitle}</p>}
+        {brand ? (
+          <>
+            <h1 className="hyphen-wordmark">{title}</h1>
+            <p key={lineIdx} className="hyphen-tagline text-sm text-slate-300 mt-3">
+              {BRAND_LINES[lineIdx].map((word, i) => (
+                <span key={word}>
+                  {i > 0 && <span className="hyphen-dash">–</span>}
+                  {word}
+                </span>
+              ))}
+            </p>
+            {subtitle && <p className="text-xs text-slate-500 mt-3">{subtitle}</p>}
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl font-bold tracking-wide text-white">{title}</h1>
+            {subtitle && <p className="text-xs text-slate-500 mt-2">{subtitle}</p>}
+          </>
+        )}
       </div>
 
       <style jsx>{`
@@ -90,6 +126,37 @@ export default function AppHeader({ title, subtitle, backHref }: AppHeaderProps)
           0% { left: var(--x1); transform: translateY(var(--y1)); }
           50% { left: var(--x2); transform: translateY(var(--y2)); }
           100% { left: var(--x3); transform: translateY(var(--y3)); }
+        }
+
+        .hyphen-wordmark {
+          font-size: clamp(2.4rem, 11vw, 3.4rem);
+          font-weight: 900;
+          font-style: italic;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          line-height: 1.05;
+          padding-right: 0.08em;
+          background: linear-gradient(180deg, #ffe7ae 0%, #fac775 42%, #e8a33d 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          color: transparent;
+          filter: drop-shadow(0 0 14px rgba(250, 199, 117, 0.3));
+        }
+        .hyphen-tagline {
+          animation: tagline-in 0.7s ease both;
+        }
+        .hyphen-dash {
+          color: #fac775;
+          font-weight: 700;
+          margin: 0 0.55em;
+        }
+        @keyframes tagline-in {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .hyphen-tagline { animation: none; }
         }
       `}</style>
     </div>
