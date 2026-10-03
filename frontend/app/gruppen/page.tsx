@@ -1,255 +1,271 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import AppHeader from '@/components/AppHeader';
 import { useKumpel } from '@/contexts/KumpelProvider';
 import { supabase } from '@/lib/supabaseClient';
-import Link from 'next/link';
 
-interface GroupInfo {
-  id: string;
-  name: string;
-  type: string;
-  department: string | null;
-  invite_code: string;
-}
-
-interface MemberRow {
-  user_id: string;
-  username: string;
-  display_name: string | null;
+interface GroupRow {
+  group_id: string;
   role: string;
-  joined_at: string;
+  groups: { id: string; name: string; type: string; department: string | null } | null;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  parent: 'Elternteil',
-  child: 'Kind',
-  member: 'Mitglied',
-};
-
-export default function GruppenDetailPage() {
-  const params = useParams();
-  const groupId = params?.id as string;
+export default function GruppenPage() {
   const { kumpel } = useKumpel();
-
-  const [group, setGroup] = useState<GroupInfo | null>(null);
-  const [members, setMembers] = useState<MemberRow[]>([]);
-  const [myRole, setMyRole] = useState<string | null>(null);
+  const [groups, setGroups] = useState<GroupRow[]>([]);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+
+  const [code, setCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<'team' | 'tipp_community'>('tipp_community');
+  const [newClub, setNewClub] = useState('');
+  const [newDept, setNewDept] = useState('junioren');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createdCode, setCreatedCode] = useState<string | null>(null);
 
   useEffect(() => {
-    if (groupId) loadAll();
-  }, [groupId]);
+    loadGroups();
+    loadAdminStatus();
+  }, []);
 
-  async function loadAll() {
-    setLoading(true);
-    setActionError(null);
+  async function loadAdminStatus() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
 
-    const { data: groupData, error: groupError } = await supabase
-      .from('groups')
-      .select('id, name, type, department, invite_code')
-      .eq('id', groupId)
+    const { data, error } = await supabase
+      .from('users')
+      .select('is_platform_admin')
+      .eq('id', session.user.id)
       .maybeSingle();
 
-    if (groupError || !groupData) {
-      console.error('Fehler beim Laden der Gruppe:', groupError?.message);
+    if (!error && data?.is_platform_admin) {
+      setIsPlatformAdmin(true);
+      setNewType('team'); // Admin startet sinnvollerweise bei "Mannschaft"
+    }
+  }
+
+  async function loadGroups() {
+    setLoading(true);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
       setLoading(false);
       return;
     }
-    setGroup(groupData as GroupInfo);
 
-    const { data: memberData, error: memberError } = await supabase.rpc('get_group_members', {
-      p_group_id: groupId,
-    });
+    const { data, error } = await supabase
+      .from('group_members')
+      .select('group_id, role, groups ( id, name, type, department )')
+      .eq('user_id', session.user.id)
+      .order('joined_at', { ascending: false });
 
-    if (memberError) {
-      console.error('Fehler beim Laden der Mitglieder:', memberError.message);
+    if (error) {
+      console.error('Fehler beim Laden der Gruppen:', error.message);
     } else {
-      setMembers((memberData as MemberRow[]) || []);
-      const mine = (memberData as MemberRow[])?.find((m) => m.user_id === kumpel?.id);
-      setMyRole(mine?.role || null);
+      setGroups((data as unknown as GroupRow[]) || []);
     }
 
-    // Ungelesene Nachrichten dieser Gruppe
-    const { data: unreadData } = await supabase.rpc('get_unread_counts');
-    const row = ((unreadData as { group_id: string; unread_count: number }[]) || []).find(
-      (r) => r.group_id === groupId
-    );
-    setUnreadCount(row ? Number(row.unread_count) : 0);
+    // Ungelesene Nachrichten pro Gruppe
+    const { data: unreadData, error: unreadError } = await supabase.rpc('get_unread_counts');
+    if (unreadError) {
+      console.error('Fehler beim Laden der Ungelesen-Zähler:', unreadError.message);
+    } else {
+      const map: Record<string, number> = {};
+      for (const r of (unreadData as { group_id: string; unread_count: number }[]) || []) {
+        map[r.group_id] = Number(r.unread_count);
+      }
+      setUnread(map);
+    }
 
     setLoading(false);
   }
 
-  async function changeRole(userId: string, newRole: string) {
-    setActionError(null);
-    const { error } = await supabase
-      .from('group_members')
-      .update({ role: newRole })
-      .eq('group_id', groupId)
-      .eq('user_id', userId);
+  async function handleJoin() {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setJoining(true);
+    setJoinError(null);
+
+    const { error } = await supabase.rpc('join_group_by_code', { p_invite_code: trimmed.toUpperCase() });
 
     if (error) {
-      setActionError('Rolle konnte nicht geändert werden: ' + error.message);
+      setJoinError('Code ungültig oder abgelaufen.');
     } else {
-      await loadAll();
+      setCode('');
+      await loadGroups();
     }
+    setJoining(false);
   }
 
-  async function removeMember(userId: string) {
-    if (!confirm('Dieses Mitglied wirklich aus der Gruppe entfernen?')) return;
-    setActionError(null);
+  async function handleCreate() {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setCreating(true);
+    setCreateError(null);
 
-    const { error } = await supabase
-      .from('group_members')
-      .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', userId);
+    const { data, error } = await supabase.rpc('create_group', {
+      p_name: trimmed,
+      p_type: newType,
+      p_club_name: newType === 'team' && newClub.trim() ? newClub.trim() : null,
+      p_department: newType === 'team' ? newDept : null,
+    });
 
     if (error) {
-      setActionError('Mitglied konnte nicht entfernt werden: ' + error.message);
-    } else {
-      await loadAll();
+      setCreateError('Konnte Gruppe nicht erstellen: ' + error.message);
+      setCreating(false);
+      return;
     }
-  }
 
-  const isAdmin = myRole === 'admin';
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#141412] text-white flex items-center justify-center">
-        <p className="text-sm text-slate-500">Lade Gruppe...</p>
-      </div>
-    );
-  }
-
-  if (!group) {
-    return (
-      <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
-        <div className="max-w-4xl mx-auto pt-6 px-4">
-          <AppHeader title="Gruppe nicht gefunden" backHref="/gruppen" />
-          <p className="text-sm text-slate-500">Diese Gruppe existiert nicht oder du bist kein Mitglied.</p>
-        </div>
-      </div>
-    );
+    const row = Array.isArray(data) ? data[0] : data;
+    setCreatedCode(row?.invite_code || null);
+    setNewName('');
+    setNewClub('');
+    await loadGroups();
+    setCreating(false);
   }
 
   return (
     <div className="min-h-screen bg-[#141412] text-white font-sans pb-12">
       <div className="max-w-4xl mx-auto pt-6 px-4">
-        <AppHeader
-          title={group.name}
-          subtitle={group.type === 'team' ? 'Mannschaft' : 'Tippgemeinschaft'}
-          backHref="/gruppen"
-        />
+        <AppHeader title="Gruppen" subtitle="Deine Mannschaft oder Freunde" backHref="/" />
 
-        {/* Einladungscode */}
-        <div className="rounded-xl p-5 bg-[#1c1c1a] mb-4 text-center">
-          <p className="text-xs text-slate-500 mb-1">Einladungscode für neue Mitglieder:</p>
-          <p className="text-xl font-mono font-black tracking-wider text-emerald-400">{group.invite_code}</p>
+        {/* Eigene Gruppen */}
+        <div className="flex flex-col gap-3 mb-8">
+          {loading && <p className="text-sm text-slate-500">Lade Gruppen...</p>}
+          {!loading && groups.length === 0 && (
+            <p className="text-sm text-slate-500">Du bist noch in keiner Gruppe.</p>
+          )}
+          {groups.map((g) => {
+            const n = unread[g.group_id] || 0;
+            return (
+              <Link
+                key={g.group_id}
+                href={`/gruppen/${g.group_id}`}
+                className="relative block rounded-xl p-5 bg-[#1c1c1a] hover:bg-[#232320] transition-colors"
+              >
+                {n > 0 && (
+                  <span className="absolute top-4 right-4 min-w-[24px] h-6 px-2 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                    {n > 99 ? '99+' : n}
+                  </span>
+                )}
+                <p className="text-base font-semibold text-white">{g.groups?.name}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {g.groups?.type === 'team' ? 'Mannschaft' : 'Tippgemeinschaft'}
+                  {g.groups?.department ? ` · ${g.groups.department}` : ''} · {g.role}
+                </p>
+              </Link>
+            );
+          })}
         </div>
 
-        <Link
-          href={`/gruppen/${groupId}/nachrichten`}
-          className="relative block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
-        >
-          {unreadCount > 0 && (
-            <span className="absolute top-4 right-4 min-w-[24px] h-6 px-2 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-          <p className="text-sm font-semibold text-white">📋 Nachrichten</p>
-          <p className="text-xs text-slate-500 mt-1">Infos vom Trainer</p>
-        </Link>
-
-        {group.type === 'team' && (
-          <Link
-            href={`/gruppen/${groupId}/chat`}
-            className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
-          >
-            <p className="text-sm font-semibold text-white">💬 Chat</p>
-            <p className="text-xs text-slate-500 mt-1">Mit Trainer oder nur Kinder</p>
-          </Link>
-        )}
-
-        {group.type === 'team' && (
-          <Link
-            href={`/gruppen/${groupId}/spiele`}
-            className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
-          >
-            <p className="text-sm font-semibold text-white">⚽ Spiele &amp; Resultate</p>
-            <p className="text-xs text-slate-500 mt-1">Spielplan und Ergebnisse der Mannschaft</p>
-          </Link>
-        )}
-
-        {group.type === 'team' && (
-          <Link
-            href={`/gruppen/${groupId}/tippspiel`}
-            className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
-          >
-            <p className="text-sm font-semibold text-white">🎯 Tippspiel</p>
-            <p className="text-xs text-slate-500 mt-1">Spiele tippen und Rangliste pro Wettbewerb</p>
-          </Link>
-        )}
-
-        {group.type === 'team' && (
-          <Link
-            href={`/gruppen/${groupId}/eltern`}
-            className="block rounded-xl p-5 bg-[#1c1c1a] mb-4 hover:bg-[#232320] transition-colors"
-          >
-            <p className="text-sm font-semibold text-white">👨‍👩‍👧 Eltern &amp; Kinder</p>
-            <p className="text-xs text-slate-500 mt-1">Kind auswählen, Trainer-Übersicht</p>
-          </Link>
-        )}
-
-        {/* Mitgliederliste */}
-        <div className="rounded-xl p-5 bg-[#1c1c1a]">
-          <p className="text-sm font-semibold text-white mb-4">
-            Mitglieder ({members.length})
-          </p>
-
-          {actionError && <p className="text-red-400 text-xs mb-3">{actionError}</p>}
-
-          <div className="flex flex-col gap-2">
-            {members.map((m) => (
-              <div
-                key={m.user_id}
-                className="flex items-center justify-between bg-[#2a2a27] rounded-lg px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-white">
-                    {m.display_name || m.username}
-                  </p>
-                  <p className="text-xs text-slate-500">{ROLE_LABELS[m.role] || m.role}</p>
-                </div>
-
-                {isAdmin && m.user_id !== kumpel?.id && (
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={m.role}
-                      onChange={(e) => changeRole(m.user_id, e.target.value)}
-                      className="bg-[#1c1c1a] border border-[#3a3a36] rounded-lg px-2 py-1 text-xs text-white"
-                    >
-                      <option value="member">Mitglied</option>
-                      <option value="parent">Elternteil</option>
-                      <option value="child">Kind</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <button
-                      onClick={() => removeMember(m.user_id)}
-                      className="text-xs text-red-400 hover:text-red-300"
-                    >
-                      Entfernen
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+        {/* Mit Code beitreten */}
+        <div className="rounded-xl p-5 bg-[#1c1c1a] mb-4">
+          <p className="text-sm font-semibold text-white mb-3">Einladungscode eingeben</p>
+          <div className="flex gap-2">
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="z.B. A1B2C3"
+              className="flex-1 bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+            />
+            <button
+              onClick={handleJoin}
+              disabled={joining || !code.trim()}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-semibold px-4 py-2 rounded-lg"
+            >
+              {joining ? '...' : 'Beitreten'}
+            </button>
           </div>
+          {joinError && <p className="text-red-400 text-xs mt-2">{joinError}</p>}
+        </div>
+
+        {/* Neue Gruppe erstellen */}
+        <div className="rounded-xl p-5 bg-[#1c1c1a]">
+          <button
+            onClick={() => setShowCreate((v) => !v)}
+            className="text-sm font-semibold text-white"
+          >
+            {showCreate ? '▾' : '▸'} Neue Gruppe erstellen
+          </button>
+
+          {showCreate && (
+            <div className="mt-4 flex flex-col gap-3">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder={newType === 'team' ? 'Name der Mannschaft, z.B. Junioren D' : 'Name der Tippgemeinschaft'}
+                className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+              />
+
+              {isPlatformAdmin ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setNewType('team')}
+                    className={`flex-1 text-sm py-2 rounded-lg ${newType === 'team' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
+                  >
+                    Mannschaft
+                  </button>
+                  <button
+                    onClick={() => setNewType('tipp_community')}
+                    className={`flex-1 text-sm py-2 rounded-lg ${newType === 'tipp_community' ? 'bg-indigo-600 text-white' : 'bg-[#2a2a27] text-slate-400'}`}
+                  >
+                    Tippgemeinschaft
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Du erstellst eine Tippgemeinschaft mit Freunden. Mannschaften legt aktuell nur der Vereinsverantwortliche an.
+                </p>
+              )}
+
+              {newType === 'team' && isPlatformAdmin && (
+                <>
+                  <input
+                    value={newClub}
+                    onChange={(e) => setNewClub(e.target.value)}
+                    placeholder="Verein, z.B. FC Bülach"
+                    className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                  <select
+                    value={newDept}
+                    onChange={(e) => setNewDept(e.target.value)}
+                    className="bg-[#2a2a27] border border-[#3a3a36] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="junioren">Junioren</option>
+                    <option value="aktive">Aktive</option>
+                    <option value="damen">Damen</option>
+                    <option value="senioren">Senioren</option>
+                  </select>
+                </>
+              )}
+
+              <button
+                onClick={handleCreate}
+                disabled={creating || !newName.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-400 text-white text-sm font-semibold py-2 rounded-lg"
+              >
+                {creating ? 'Erstelle...' : 'Gruppe erstellen'}
+              </button>
+
+              {createError && <p className="text-red-400 text-xs">{createError}</p>}
+
+              {createdCode && (
+                <div className="bg-black/20 rounded-lg p-3 text-center">
+                  <p className="text-xs text-slate-400 mb-1">Einladungscode für Mitglieder:</p>
+                  <p className="text-xl font-mono font-black tracking-wider text-emerald-400">{createdCode}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
